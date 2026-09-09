@@ -233,5 +233,5 @@ Good things to screenshot/document from this build:
 - Add a `/recommend` endpoint that chains: student's course list → search_catalog per course → dedupe/rank
 - Voice input via a speech-to-text layer in front of `/chat`
 - Multi-language (Bengali/English) support in the system prompt
-=======
+
 
