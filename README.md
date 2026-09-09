@@ -1,4 +1,12 @@
-# HITK Library AI Assistant — Setup Guide 
+<div align="center">
+
+<img src="https://media2.giphy.com/media/dUsblht9Hs4abHk8aG/giphy.gif" width="500"/>
+
+# 📚 HITK Library AI Assistant
+
+###  Agentic RAG-powered AI Assistant for Intelligent Library Management
+
+</div>
 
 ## What we are building
 A RAG + agentic AI assistant for the college library:
