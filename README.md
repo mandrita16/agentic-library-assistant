@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 # HITK Library AI Assistant — Setup Guide (Windows / VS Code / PowerShell)
 
 ## What you're building
@@ -150,5 +149,4 @@ Good things to screenshot/document from this build:
 - Voice input via a speech-to-text layer in front of `/chat`
 - Multi-language (Bengali/English) support in the system prompt
 =======
-# Library-assistant
->>>>>>> cb63986c507ed4ef316142b6822d2193b9ff60a6
+
