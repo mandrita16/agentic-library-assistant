@@ -35,8 +35,8 @@ This two-store design (vectors for *meaning*, MongoDB for *live facts*) is the c
 ## Step 1 — Clone the repository
 
 ```powershell
-git clone https://github.com/mandrita16/Library-assistant.git
-cd Library-assistant
+git clone https://github.com/mandrita16/agentic-library-assistant.git
+cd agentic-library-assistant
 ```
 
 ---
