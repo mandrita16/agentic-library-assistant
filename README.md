@@ -148,10 +148,13 @@ flowchart LR
 ```
 
 Unlike a traditional RAG pipeline:
-
+```
 Query → Retrieve → Generate
+```
 
-this project follows:
+This project follows:
+
+```
 Query
   ↓
 Agent Reasoning
@@ -165,6 +168,7 @@ Observe Result
 Choose Next Tool if Required
   ↓
 Generate Final Response
+```
 
 ##  Example
 
@@ -174,8 +178,8 @@ I need books on NLP for CS603.
 
 Which ones are available?
 
-Agent Execution
-
+### Agent Execution
+```
 1. Claude receives the request
           ↓
 2. Calls search_catalog
@@ -189,8 +193,9 @@ Agent Execution
 6. MongoDB returns live availability
           ↓
 7. Claude generates the final response
+```
 
-Example Response
+### Example Response
 
 I found 3 books relevant to NLP and CS603.
 
