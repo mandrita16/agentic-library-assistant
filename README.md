@@ -1,6 +1,6 @@
-# HITK Library AI Assistant — Setup Guide (Windows / VS Code / PowerShell)
+# HITK Library AI Assistant — Setup Guide 
 
-## What you're building
+## What we are building
 A RAG + agentic AI assistant for the college library:
 - **RAG**: local embeddings (sentence-transformers) + ChromaDB vector search over your book catalog
 - **Agentic**: Claude decides which tool to call — search, check availability, reserve, renew — in a loop, instead of a single fixed pipeline
