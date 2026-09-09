@@ -241,7 +241,7 @@ Good things to screenshot/document from this build:
 2. A `/chat` request/response pair showing the tool-call trail (`tool_calls` field in the response) — this IS your "agentic AI" evidence
 3. The two-store architecture diagram (ask me to generate this next if you'd like a visual)
 
-## Extending this later (good "Future Enhancements" bullets)
+## Extending this later 
 - Swap the hand-rolled agent loop in `agent.py` for LangGraph's `create_react_agent` (same pattern you used in SentinelOps)
 - Add a `/recommend` endpoint that chains: student's course list → search_catalog per course → dedupe/rank
 - Voice input via a speech-to-text layer in front of `/chat`
