@@ -1,179 +1,295 @@
-# HITK AI Library Management System — Setup Guide (Windows / VS Code / PowerShell)
+<div align="center">
 
-## What you're building
-A full RAG + agentic AI library management system with a real login-gated frontend:
-- **RAG**: local embeddings (sentence-transformers) + ChromaDB over the book catalog
-- **Agentic**: Claude chooses from 10 tools — search, availability, recommend-for-course,
-  find-best-available-book, issue, return, renew, reserve, cancel-reservation, dashboard —
-  deciding for itself which to call, in a loop
-- **Circulation**: real issue/return/renew with due dates, a reservation waitlist, and fines
-- **Structured data**: MongoDB holds all live state (availability, borrow records, reservations, fines)
-- **Auth**: JWT-based login for students and admins (bcrypt-hashed passwords) — every
-  circulation/chat/admin action is bound to the authenticated user, never a client-supplied ID
-- **Frontend**: a single-page chat UI (`static/index.html`) — aurora/glassmorphism login,
-  a book-avatar assistant with idle/thinking/responding states, and search results rendered
-  as tilting "book cards" — no React/build step, served directly by FastAPI
+<img src="https://media2.giphy.com/media/dUsblht9Hs4abHk8aG/giphy.gif" width="500"/>
 
-The two-store split (ChromaDB for *meaning*, MongoDB for *live facts*) is still the core
-architecture decision — call it out explicitly in your Solution Blueprint doc.
+# 📚 HITK Library AI Assistant
+
+###  Agentic RAG-powered AI Assistant for Intelligent Library Management
+
+</div>
+
+## What we are building
+A RAG + agentic AI assistant for the college library:
+- **RAG**: local embeddings (sentence-transformers) + ChromaDB vector search over your book catalog
+- **Agentic**: Claude decides which tool to call — search, check availability, reserve, renew — in a loop, instead of a single fixed pipeline
+- **Structured data**: MongoDB holds live availability/circulation state (this is the part vector search can't do reliably)
+
+This two-store design (vectors for *meaning*, MongoDB for *live facts*) is the core architecture decision — explain it explicitly in your Solution Blueprint doc, it's a strong "originality" point.
 
 ---
 
 ## Prerequisites
 
-1. **Python 3.11+** — `python --version`
-2. **MongoDB Community Server** — installs as a Windows service on `localhost:27017`, starts automatically, nothing to run manually.
-3. **An Anthropic API key** — console.anthropic.com → create a key.
+1. **Python 3.11+** — check with:
+   ```powershell
+   python --version
+   ```
+   If missing, install from python.org and make sure "Add to PATH" is checked during install.
+
+2. **MongoDB Community Server** — download from mongodb.com/try/download/community, install with default options. After install, MongoDB runs automatically as a Windows service on `localhost:27017` — you don't need to start anything manually.
+
+3. **An Anthropic API key** — sign up at console.anthropic.com, create a key. You'll paste it into `.env` in Step 4 below.
 
 ---
 
-## Step 1 — Open in VS Code
-```powershell
-cd path\to\library_ai_assistant
-code .
-```
-Open a terminal: **Terminal → New Terminal** (PowerShell by default).
+## Step 1 — Clone the repository
 
-## Step 2 — Virtual environment
+```powershell
+git clone https://github.com/mandrita16/agentic-library-assistant.git
+cd agentic-library-assistant
+```
+
+---
+
+## Step 2 — Create and activate a virtual environment
+
 ```powershell
 python -m venv venv
 .\venv\Scripts\Activate.ps1
 ```
-If activation is blocked:
-```powershell
-Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
-```
-Prompt should now show `(venv)`.
+
+---
 
 ## Step 3 — Install dependencies
+
 ```powershell
 pip install -r requirements.txt
 ```
-First run takes a few minutes (PyTorch download for sentence-transformers).
 
-## Step 4 — Configure environment
+---
+
+## Step 4 — Configure environment variables
+
 ```powershell
 copy .env.example .env
 ```
-Paste your real key into `.env`:
+
+Open the new `.env` file in VS Code and paste in your real Anthropic API key:
 ```
 ANTHROPIC_API_KEY=sk-ant-xxxxxxxxxxxxxxxxxxxx
 ```
-Generate a real JWT secret and admin setup key (don't ship the placeholder values):
-```powershell
-python -c "import secrets; print(secrets.token_hex(32))"
-```
-Paste the output into `JWT_SECRET_KEY` in `.env`, and pick any passphrase for `ADMIN_SETUP_KEY`.
+Leave `MONGO_URI` as-is if you installed MongoDB with default settings.
 
-## Step 5 — Seed the database + build the vector index
+---
+
+## Step 5 — Seed the database and build the vector index
+
+This is a **one-time step** (run it again only if you edit `data/sample_books.json`):
+
 ```powershell
 python -m app.ingest
 ```
-Re-run this any time `data/sample_books.json` changes.
 
-## Step 6 — Run the server
+Expected output:
+```
+[ingest] Loaded 8 books from data/sample_books.json
+[ingest] MongoDB seeded.
+[vector_store] Indexed 8 books into ChromaDB.
+[ingest] ChromaDB vector index built. Ingestion complete.
+```
+
+The first run will also download the embedding model (~80MB) — this only happens once, it's cached afterward.
+
+---
+
+## Step 6 — Run the API server
+
 ```powershell
 uvicorn app.main:app --reload
 ```
-Open **http://127.0.0.1:8000/** for the chat UI — register a student account on the "New member"
-tab, then sign in. Open **http://127.0.0.1:8000/docs** for the Swagger API explorer (useful for
-creating an admin account via `POST /auth/admin/register` with your `ADMIN_SETUP_KEY`).
 
----
-
-## Authentication
-
-- **Students**: register via the UI or `POST /auth/register`, then `POST /auth/login` returns a
-  JWT. Every protected endpoint expects `Authorization: Bearer <token>`.
-- **Admins**: `POST /auth/admin/register` requires `setup_key` to match `ADMIN_SETUP_KEY` in
-  `.env` — this is what stops anyone from self-registering as admin. Then `POST /auth/admin/login`.
-- **Trust boundary**: `student_id` is never accepted from the request body on any protected
-  route (chat, circulation, dashboard) — it's always read from the token. See the security note
-  at the top of `agent/tools.py` for why this matters for the chat agent specifically.
-- Tokens expire after 1 day (`JWT_EXPIRE_MINUTES` in `config.py`).
-
----
-
-## Endpoints
-
-| Method | Path | Auth | Purpose |
-|---|---|---|---|
-| POST | `/auth/register` | — | Student self-registration |
-| POST | `/auth/login` | — | Student login → JWT |
-| POST | `/auth/admin/register` | setup key | Admin registration |
-| POST | `/auth/admin/login` | — | Admin login → JWT |
-| POST | `/chat` | student | Main agentic entry point (natural language, multi-turn) |
-| GET | `/books/search?q=...` | — | Direct semantic search, bypassing the agent |
-| GET | `/books/{book_id}/availability` | — | Live copy count + shelf location |
-| GET | `/students/{student_id}/dashboard` | student (self only) | Borrowed books, due-soon, reservations, fine |
-| POST | `/circulation/issue` | student | Issue a book (sets due date) |
-| POST | `/circulation/return` | student | Return a book (calculates fine, frees copy, notifies waitlist) |
-| POST | `/circulation/renew` | student | Renew (blocked if max renewals hit or someone's waiting) |
-| POST | `/circulation/reserve` | student | Join the waitlist |
-| POST | `/circulation/cancel-reservation` | student | Leave the waitlist |
-| POST | `/admin/books` | admin | Add a new title (catalog + vector index) |
-| PATCH | `/admin/books/copies` | admin | Adjust total copies (e.g. library buys more) |
-| DELETE | `/admin/books/{book_id}` | admin | Remove a title |
-| GET | `/admin/analytics/most-borrowed` | admin | Top borrowed books |
-| GET | `/admin/analytics/never-borrowed` | admin | Dead stock |
-| GET | `/admin/analytics/overdue` | admin | Currently overdue records |
-
-### Try these in `/chat` (after logging in — student_id is bound to your token automatically)
-```json
-{"message": "I'm studying CS501 and weak in search algorithms, recommend some books", "history": []}
-{"message": "I need an NLP book for tomorrow's exam, give me the best available one", "history": []}
-{"message": "CS603 er jonno NLP-r boi chai", "history": []}
-{"message": "Issue book B001 to student S12345", "history": []}
+You should see:
 ```
-For multi-turn, take the `"history"` field from one response and pass it back into the next request.
+Uvicorn running on http://127.0.0.1:8000
+```
 
+---
+
+## Step 7 — Try it out
+
+Open **http://127.0.0.1:8000/docs** in your browser — this is FastAPI's auto-generated Swagger UI. Use it to test without writing any frontend code:
+
+- **POST /chat** — try `{"message": "I need books on NLP for CS603", "history": []}`
+  Watch it call `search_catalog`, then `check_availability`, then answer in plain English.
+- **GET /search?q=machine learning** — raw semantic search, no agent reasoning
+- **POST /reserve** — try `{"book_id": "B001", "student_id": "S12345"}`
+
+For a multi-turn conversation, take the `"history"` field FROM the response of one `/chat` call and pass it back INTO the next call's request body — that's how the agent remembers earlier turns.
+
+---
+## Architecture
+```mermaid
+flowchart TD
+  U[👤 Student] --> API[⚡ FastAPI Backend]
+  API --> AGENT[🤖 Claude Agent]
+  AGENT --> DECIDE{Tool Selection}
+  DECIDE --> SEARCH[🔎 search_catalog]
+  DECIDE --> AVAIL[📚 check_availability]
+  DECIDE --> RESERVE[📌 reserve_book]
+  DECIDE --> RENEW[🔄 renew_book]
+  SEARCH --> EMBED[🧠 Sentence-Transformers]
+  EMBED --> CHROMA[(🟠 ChromaDB)]
+  AVAIL --> MONGO[(🍃 MongoDB)]
+  RESERVE --> MONGO
+  RENEW --> MONGO
+  CHROMA --> AGENT
+  MONGO --> AGENT
+  AGENT --> RESPONSE[💬 Natural Language Response]
+  RESPONSE --> U
+```
+
+  ---
+
+**Agentic Request Flow**
+
+```mermaid
+flowchart LR
+  UQ([User Query]) --> API[FastAPI]
+  API --> CLAUDE[Claude Agent]
+  CLAUDE -->|Search Catalog| CHROMA[ChromaDB]
+  CLAUDE -->|Check Availability| MONGO[MongoDB]
+  CLAUDE -->|Reserve Book| MONGO
+  CLAUDE -->|Renew Loan| MONGO
+  CHROMA --> CLAUDE
+  MONGO --> CLAUDE
+  CLAUDE --> RESP[Final Natural-language Response]
+```
+
+Unlike a traditional RAG pipeline:
+```
+Query → Retrieve → Generate
+```
+
+This project follows:
+
+```
+Query
+  ↓
+Agent Reasoning
+  ↓
+Choose Tool
+  ↓
+Execute Tool
+  ↓
+Observe Result
+  ↓
+Choose Next Tool if Required
+  ↓
+Generate Final Response
+```
+
+##  Example
+
+User Request
+
+I need books on NLP for CS603.
+
+Which ones are available?
+
+### Agent Execution
+```
+1. Claude receives the request
+          ↓
+2. Calls search_catalog
+          ↓
+3. ChromaDB returns relevant books
+          ↓
+4. Claude identifies candidate books
+          ↓
+5. Calls check_availability
+          ↓
+6. MongoDB returns live availability
+          ↓
+7. Claude generates the final response
+```
+
+### Example Response
+
+I found 3 books relevant to NLP and CS603.
+
+1. Natural Language Processing with Python
+   Available: Yes
+
+2. Speech and Language Processing
+   Available: No
+
+3. Foundations of Statistical Natural Language Processing
+   Available: Yes
+   
 ---
 
 ## Project structure
 ```
 library_ai_assistant/
-├── app/
-│   ├── api/              # FastAPI routers — thin, no business logic
-│   │   ├── chat.py
-│   │   ├── books.py
-│   │   ├── students.py
-│   │   ├── circulation.py
-│   │   └── admin.py
-│   ├── agent/             # the agentic loop
-│   │   ├── agent.py        # tool-calling loop
-│   │   ├── prompts.py      # system prompt (multi-language support lives here)
-│   │   └── tools.py        # tool schemas + dispatch
-│   ├── services/           # all business logic
-│   │   ├── book_service.py
-│   │   ├── circulation_service.py   # issue/return/renew/reserve
-│   │   ├── fine_service.py
-│   │   ├── recommendation_service.py # chained RAG + availability + ranking
-│   │   ├── student_service.py        # dashboard aggregation
-│   │   └── analytics_service.py      # admin aggregation queries
-│   ├── database/
-│   │   ├── mongo.py        # connection + collection handles
-│   │   └── models.py       # documented collection shapes
-│   ├── rag/
-│   │   ├── embeddings.py   # embedding model, isolated so it's swappable
-│   │   └── vector_store.py # ChromaDB indexing + semantic search
-│   ├── config.py           # settings + circulation policy constants
-│   ├── ingest.py            # one-time seed script
-│   └── main.py               # wires all routers together
-├── data/sample_books.json
+│
 ├── requirements.txt
-├── .env.example
-└── README.md
+├── .env
+├── README.md
+│
+├── data/
+│   └── sample_books.json
+│
+├── static/
+│   └── index.html
+│
+└── app/
+    ├── __init__.py
+    ├── config.py
+    ├── ingest.py
+    ├── main.py
+    │
+    ├── auth/
+    │   ├── __init__.py
+    │   ├── security.py
+    │   └── dependencies.py
+    │
+    ├── database/
+    │   ├── __init__.py
+    │   ├── mongo.py
+    │   └── models.py
+    │
+    ├── rag/
+    │   ├── __init__.py
+    │   ├── embeddings.py
+    │   └── vector_store.py
+    │
+    ├── services/
+    │   ├── __init__.py
+    │   ├── book_service.py
+    │   ├── circulation_service.py
+    │   ├── fine_service.py
+    │   ├── recommendation_service.py
+    │   ├── student_service.py
+    │   ├── analytics_service.py
+    │   └── auth_service.py
+    │
+    ├── agent/
+    │   ├── __init__.py
+    │   ├── prompts.py
+    │   ├── tools.py
+    │   └── agent.py
+    │
+    └── api/
+        ├── __init__.py
+        ├── chat.py
+        ├── books.py
+        ├── students.py
+        ├── circulation.py
+        ├── admin.py
+        └── auth.py
+
 ```
 
-## What to screenshot for your Prompt Engineering Journal / Blueprint
-1. `/docs` Swagger UI — proof of a working, multi-router API
-2. A `/chat` response's `tool_calls` field for a chained request (e.g. the "best available book" query) — this is your strongest agentic-AI evidence, since it shows the agent invoking `find_best_available_book`, which itself chains retrieval + availability + ranking
-3. The layered folder structure itself — a genuine "why this design" talking point for the viva
+## For your Prompt Engineering Journal / Blueprint doc
+Good things to screenshot/document from this build:
+1. The `/docs` Swagger UI in action — proof of a working API
+2. A `/chat` request/response pair showing the tool-call trail (`tool_calls` field in the response) — this IS your "agentic AI" evidence
+3. The two-store architecture diagram (ask me to generate this next if you'd like a visual)
 
-## Known scope boundaries (good "Future Enhancements" bullets — don't build these, just name them)
-- **Token refresh / logout server-side** — tokens are stateless JWTs valid for 1 day; there's no
-  revocation list, so "logout" just deletes the local token, and a stolen token stays valid until
-  it expires.
-- **Voice interface** — speech-to-text in front of `/chat`.
-- **Search-query logging** — "most searched subjects" analytics needs a new `search_log` collection that isn't implemented yet.
-- **LangGraph** — the agent loop is hand-rolled with the raw Anthropic API for transparency/stability; swapping in `create_react_agent` (same pattern as your SentinelOps project) is a one-file change.
+## Extending this later 
+- Swap the hand-rolled agent loop in `agent.py` for LangGraph's `create_react_agent` (same pattern you used in SentinelOps)
+- Add a `/recommend` endpoint that chains: student's course list → search_catalog per course → dedupe/rank
+- Voice input via a speech-to-text layer in front of `/chat`
+- Multi-language (Bengali/English) support in the system prompt
+
+
