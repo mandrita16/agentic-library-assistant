@@ -221,18 +221,53 @@ I found 3 books relevant to NLP and CS603.
 ## Project structure
 ```
 library_ai_assistant/
-├── app/
-│   ├── config.py       # all settings, loaded from .env
-│   ├── database.py     # MongoDB: live availability, reservations
-│   ├── vector_store.py # ChromaDB: semantic search over catalog
-│   ├── agent.py         # the agentic loop (Claude + tools)
-│   ├── ingest.py        # one-time seed script
-│   └── main.py           # FastAPI endpoints
+│
+├── requirements.txt
+├── .env
+├── README.md
+│
 ├── data/
 │   └── sample_books.json
-├── requirements.txt
-├── .env.example
-└── README.md
+│
+└── app/
+    ├── __init__.py
+    ├── config.py
+    ├── ingest.py
+    ├── main.py
+    │
+    ├── database/
+    │   ├── __init__.py
+    │   ├── mongo.py
+    │   └── models.py
+    │
+    ├── rag/
+    │   ├── __init__.py
+    │   ├── embeddings.py
+    │   └── vector_store.py
+    │
+    ├── services/
+    │   ├── __init__.py
+    │   ├── book_service.py
+    │   ├── circulation_service.py
+    │   ├── fine_service.py
+    │   ├── recommendation_service.py
+    │   ├── student_service.py
+    │   └── analytics_service.py
+    │
+    ├── agent/
+    │   ├── __init__.py
+    │   ├── prompts.py
+    │   ├── tools.py
+    │   └── agent.py
+    │
+    └── api/
+        ├── __init__.py
+        ├── chat.py
+        ├── books.py
+        ├── students.py
+        ├── circulation.py
+        └── admin.py
+
 ```
 
 ## For your Prompt Engineering Journal / Blueprint doc
