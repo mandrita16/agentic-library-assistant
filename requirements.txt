@@ -17,3 +17,6 @@ langchain-chroma
 sentence-transformers
 
 pydantic
+
+passlib[bcrypt]
+python-jose[cryptography]

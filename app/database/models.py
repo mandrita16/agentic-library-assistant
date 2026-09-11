@@ -16,7 +16,14 @@ BOOK
 STUDENT
 {
   student_id: str, name: str, department: str,
-  outstanding_fine: float   # rupees, running total
+  password_hash: str,        # bcrypt hash — never store or log the raw password
+  outstanding_fine: float    # rupees, running total
+}
+
+ADMIN
+{
+  admin_id: str, name: str,
+  password_hash: str         # bcrypt hash
 }
 
 BORROW_RECORD
