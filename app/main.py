@@ -22,7 +22,8 @@ Frontend:
 
     http://127.0.0.1:8000/
 """
-
+from pathlib import Path
+from fastapi.responses import FileResponse
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -79,14 +80,12 @@ app.include_router(admin.router)
 @app.get("/", tags=["system"])
 def root():
     """
-    Basic health check for the application.
+    Serve the MindSync frontend.
     """
+    base_dir = Path(__file__).resolve().parent.parent
+    frontend_file = base_dir / "static" / "index.html"
 
-    return {
-        "status": "ok",
-        "service": "MindSync",
-        "version": "1.0.0",
-    }
+    return FileResponse(frontend_file)
 
 
 # ===================================================================

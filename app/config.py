@@ -96,3 +96,20 @@ MAX_RENEWALS = int(
 FINE_PER_DAY = float(
     os.getenv("FINE_PER_DAY", "5")
 )
+# ============================================================
+# JWT Authentication Configuration
+# ============================================================
+
+JWT_SECRET_KEY = os.getenv(
+    "JWT_SECRET_KEY",
+    ""
+)
+
+JWT_ALGORITHM = os.getenv(
+    "JWT_ALGORITHM",
+    "HS256"
+)
+
+JWT_EXPIRE_MINUTES = int(
+    os.getenv("JWT_EXPIRE_MINUTES", "60")
+)
