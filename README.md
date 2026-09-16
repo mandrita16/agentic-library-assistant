@@ -143,7 +143,7 @@ For a multi-turn conversation, take the `"history"` field FROM the response of o
 ```mermaid
 flowchart TD
   U[👤 Student] --> API[⚡ FastAPI Backend]
-  API --> AGENT[🤖 Claude Agent]
+  API --> AGENT[🤖 Groq Agent]
   AGENT --> DECIDE{Tool Selection}
   DECIDE --> SEARCH[🔎 search_catalog]
   DECIDE --> AVAIL[📚 check_availability]
@@ -312,7 +312,14 @@ library_ai_assistant/
         └── admin.py
 
 ```
+---
+## 🚀 Live Demo
 
+MindSync:
+```
+https://agentic-library-assistant-production.up.railway.app/
+```
+---
 ## For your Prompt Engineering Journal / Blueprint doc
 Good things to screenshot/document from this build:
 1. The `/docs` Swagger UI in action — proof of a working API
