@@ -4,7 +4,7 @@ uvicorn[standard]
 pymongo
 python-dotenv
 groq
-anthropic
+
 
 langchain
 langchain-core
