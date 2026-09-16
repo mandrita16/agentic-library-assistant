@@ -5,180 +5,361 @@ This is the "agentic AI" layer, and it's the part worth explaining
 carefully in your Prompt Engineering Journal.
 
 WHAT MAKES THIS "AGENTIC" (vs. plain RAG)?
-Plain RAG = retrieve documents -> stuff into a prompt -> generate an answer.
+Plain RAG = retrieve documents -> stuff them into a prompt -> generate an answer.
 It's a single, fixed pipeline. It can't take ACTIONS or decide dynamically
 what to do next.
 
 An agent = the LLM is given a set of TOOLS (Python functions) and, in a
 LOOP, decides for itself:
-  - "Do I need to search the catalog?" -> calls semantic_search
+  - "Do I need to search the catalog?" -> calls search_catalog
   - "The user wants to know if it's free?" -> calls check_availability
   - "The user wants to reserve it?" -> calls reserve_book
   - "I now have enough info to answer in plain English" -> stops and replies
 
-This loop (Claude calls a tool -> we run the real Python function -> we
-feed the result back to Claude -> repeat) is literally what LangGraph
-and other "agent frameworks" do under the hood. We hand-roll it here
-directly with the Anthropic API so you (a) fully understand the
-mechanism for your journal/viva, and (b) avoid dependency-version
-breakage from LangGraph's API changes. Swapping this loop for a
-LangGraph `create_react_agent` later is a one-file change if you want
-to use it as a "Future Enhancement" bullet.
+This loop (Groq calls a tool -> we run the real Python function -> we
+feed the result back to Groq -> repeat) is the agentic mechanism.
+
+We implement the loop directly with the Groq API so the mechanism is
+easy to understand for the Prompt Engineering Journal and viva.
 """
 
 import json
-import anthropic
-from app.config import ANTHROPIC_API_KEY, CLAUDE_MODEL
+from groq import Groq
+
+from app.config import GROQ_API_KEY, GROQ_MODEL
 from app.vector_store import semantic_search
 from app.database import get_availability, reserve_book, renew_book
 
-_client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
 
 # ---------------------------------------------------------------------
-# STEP 1: Define the tools. Each tool has a name, a description (Claude
-# reads this to decide WHEN to use it — be specific), and a JSON schema
-# for its inputs.
+# Groq client
 # ---------------------------------------------------------------------
+
+_client = Groq(api_key=GROQ_API_KEY)
+
+
+# ---------------------------------------------------------------------
+# STEP 1: Define the tools.
+#
+# Each tool has:
+#   - name
+#   - description
+#   - JSON schema for its inputs
+#
+# The LLM reads these descriptions to decide WHEN a tool should be used.
+# ---------------------------------------------------------------------
+
 TOOLS = [
     {
-        "name": "search_catalog",
-        "description": (
-            "Semantic search over the library's book catalog. Use this whenever "
-            "the user is looking for books on a topic, course, or concept — even "
-            "if they don't use exact title/author names. Returns candidate books "
-            "with a similarity score, NOT live availability."
-        ),
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "query": {"type": "string", "description": "The topic/course/concept to search for."},
-                "top_k": {"type": "integer", "description": "How many results to return (default 5)."},
+        "type": "function",
+        "function": {
+            "name": "search_catalog",
+            "description": (
+                "Semantic search over the library's book catalog. Use this whenever "
+                "the user is looking for books on a topic, course, or concept — even "
+                "if they don't use exact title or author names. Returns candidate books "
+                "with a similarity score, NOT live availability."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "The topic, course, or concept to search for.",
+                    },
+                    "top_k": {
+                        "type": "integer",
+                        "description": "How many results to return. Default is 5.",
+                    },
+                },
+                "required": ["query"],
             },
-            "required": ["query"],
         },
     },
     {
-        "name": "check_availability",
-        "description": (
-            "Look up LIVE, real-time availability for a specific book_id. Always "
-            "call this before telling a user a book is or isn't available — "
-            "search_catalog results do NOT include live copy counts."
-        ),
-        "input_schema": {
-            "type": "object",
-            "properties": {"book_id": {"type": "string"}},
-            "required": ["book_id"],
+        "type": "function",
+        "function": {
+            "name": "check_availability",
+            "description": (
+                "Look up LIVE, real-time availability for a specific book_id. "
+                "Always call this before telling a user whether a book is available. "
+                "search_catalog results do NOT contain live copy counts."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "book_id": {
+                        "type": "string",
+                        "description": "The unique ID of the book.",
+                    }
+                },
+                "required": ["book_id"],
+            },
         },
     },
     {
-        "name": "reserve_book",
-        "description": "Reserve one copy of a book for a student, if a copy is currently available.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "book_id": {"type": "string"},
-                "student_id": {"type": "string", "description": "The student's roll number or ID."},
+        "type": "function",
+        "function": {
+            "name": "reserve_book",
+            "description": (
+                "Reserve one copy of a book for a student, if a copy is "
+                "currently available."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "book_id": {
+                        "type": "string",
+                        "description": "The unique ID of the book.",
+                    },
+                    "student_id": {
+                        "type": "string",
+                        "description": "The student's roll number or ID.",
+                    },
+                },
+                "required": ["book_id", "student_id"],
             },
-            "required": ["book_id", "student_id"],
         },
     },
     {
-        "name": "renew_book",
-        "description": "Renew a book the student currently has issued, extending its due date.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "book_id": {"type": "string"},
-                "student_id": {"type": "string"},
+        "type": "function",
+        "function": {
+            "name": "renew_book",
+            "description": (
+                "Renew a book the student currently has issued, extending "
+                "its due date."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "book_id": {
+                        "type": "string",
+                        "description": "The unique ID of the book.",
+                    },
+                    "student_id": {
+                        "type": "string",
+                        "description": "The student's roll number or ID.",
+                    },
+                },
+                "required": ["book_id", "student_id"],
             },
-            "required": ["book_id", "student_id"],
         },
     },
 ]
 
+
 # ---------------------------------------------------------------------
 # STEP 2: Map tool names -> the real Python functions that execute them.
-# This is the "action" half of the agent — Claude only ever DECIDES to
-# call a tool; this dictionary is what actually runs it.
+#
+# The LLM only DECIDES to call a tool.
+# This function actually executes the corresponding Python operation.
 # ---------------------------------------------------------------------
+
 def _execute_tool(name: str, tool_input: dict) -> dict:
+
     if name == "search_catalog":
-        results = semantic_search(tool_input["query"], tool_input.get("top_k", 5))
+        results = semantic_search(
+            tool_input["query"],
+            tool_input.get("top_k", 5)
+        )
         return {"results": results}
+
     elif name == "check_availability":
-        return get_availability(tool_input["book_id"]) or {"error": "book_id not found"}
+        return (
+            get_availability(tool_input["book_id"])
+            or {"error": "book_id not found"}
+        )
+
     elif name == "reserve_book":
-        return reserve_book(tool_input["book_id"], tool_input["student_id"])
+        return reserve_book(
+            tool_input["book_id"],
+            tool_input["student_id"]
+        )
+
     elif name == "renew_book":
-        return renew_book(tool_input["book_id"], tool_input["student_id"])
+        return renew_book(
+            tool_input["book_id"],
+            tool_input["student_id"]
+        )
+
     else:
         return {"error": f"Unknown tool: {name}"}
 
 
+# ---------------------------------------------------------------------
+# SYSTEM PROMPT
+# ---------------------------------------------------------------------
+
 SYSTEM_PROMPT = """You are the HITK Library Assistant, a helpful AI that helps students
-find books, check availability, and manage reservations/renewals.
+find books, check availability, and manage reservations and renewals.
 
 Rules:
 - Always use search_catalog to find books before answering "what books exist on X" questions.
-- Always use check_availability before telling a student whether a book is available —
-  never guess or rely on search_catalog alone for availability.
-- Be concise and specific: mention shelf location when known, and always mention
-  live copy counts when discussing availability.
-- If a student asks to reserve/renew, confirm the book_id you're acting on before calling
-  the tool, unless it's already unambiguous from context.
+- Always use check_availability before telling a student whether a book is available.
+- Never guess availability or rely on search_catalog alone for live copy counts.
+- Be concise and specific.
+- Mention shelf location when known.
+- Always mention live copy counts when discussing availability.
+- If a student asks to reserve or renew a book, confirm the book_id you are acting on
+  before calling the tool, unless it is already unambiguous from the conversation.
 """
 
 
-def run_agent(user_message: str, conversation_history: list[dict] | None = None) -> dict:
-    """
-    The main agentic loop.
+# ---------------------------------------------------------------------
+# STEP 3: Main agentic loop
+# ---------------------------------------------------------------------
 
-    conversation_history: list of {"role": "user"/"assistant", "content": ...}
-    from previous turns, so the agent has memory across a chat session.
-    Pass None / [] for a fresh conversation.
+def run_agent(
+    user_message: str,
+    conversation_history: list[dict] | None = None
+) -> dict:
 
-    Returns: {"reply": str, "history": updated list, "tool_calls": [debug log]}
     """
+    Main agentic loop.
+
+    conversation_history:
+        Previous messages from the chat session.
+
+    Returns:
+        {
+            "reply": str,
+            "history": updated conversation history,
+            "tool_calls": debug information
+        }
+    """
+
     messages = list(conversation_history or [])
-    messages.append({"role": "user", "content": user_message})
 
-    tool_call_log = []  # purely for your demo/debugging — shows the agent's reasoning trail
+    messages.append(
+        {
+            "role": "user",
+            "content": user_message
+        }
+    )
 
-    # Loop: keep going until Claude responds WITHOUT requesting a tool call.
+    # Used for debugging/demo purposes.
+    # This lets us see which tools the agent actually called.
+    tool_call_log = []
+
+
+    # -----------------------------------------------------------------
+    # Keep looping until the LLM gives a final answer without
+    # requesting another tool.
+    # -----------------------------------------------------------------
+
     while True:
-        response = _client.messages.create(
-            model=CLAUDE_MODEL,
-            max_tokens=1024,
-            system=SYSTEM_PROMPT,
+
+        response = _client.chat.completions.create(
+            model=GROQ_MODEL,
+            messages=[
+                {
+                    "role": "system",
+                    "content": SYSTEM_PROMPT
+                },
+                *messages
+            ],
             tools=TOOLS,
-            messages=messages,
+            tool_choice="auto",
+            max_tokens=1024,
         )
 
-        # Did Claude ask to use a tool, or is it done reasoning?
-        if response.stop_reason != "tool_use":
-            # Final answer — extract the text block(s) and return.
-            final_text = "".join(
-                block.text for block in response.content if block.type == "text"
+
+        message = response.choices[0].message
+
+
+        # -------------------------------------------------------------
+        # No tool call -> the agent has enough information and can
+        # provide the final answer.
+        # -------------------------------------------------------------
+
+        if not message.tool_calls:
+
+            final_text = message.content or ""
+
+            messages.append(
+                {
+                    "role": "assistant",
+                    "content": final_text
+                }
             )
-            messages.append({"role": "assistant", "content": response.content})
-            return {"reply": final_text, "history": messages, "tool_calls": tool_call_log}
 
-        # Claude wants to call one or more tools. Run each, collect results.
-        messages.append({"role": "assistant", "content": response.content})
+            return {
+                "reply": final_text,
+                "history": messages,
+                "tool_calls": tool_call_log
+            }
 
-        tool_results = []
-        for block in response.content:
-            if block.type == "tool_use":
-                result = _execute_tool(block.name, block.input)
-                tool_call_log.append({"tool": block.name, "input": block.input, "result": result})
-                tool_results.append(
-                    {
-                        "type": "tool_result",
-                        "tool_use_id": block.id,
-                        "content": json.dumps(result),
-                    }
+
+        # -------------------------------------------------------------
+        # The LLM requested one or more tools.
+        # -------------------------------------------------------------
+
+        assistant_message = {
+            "role": "assistant",
+            "content": message.content or "",
+            "tool_calls": []
+        }
+
+
+        for tool_call in message.tool_calls:
+
+            assistant_message["tool_calls"].append(
+                {
+                    "id": tool_call.id,
+                    "type": "function",
+                    "function": {
+                        "name": tool_call.function.name,
+                        "arguments": tool_call.function.arguments,
+                    },
+                }
+            )
+
+
+        messages.append(assistant_message)
+
+
+        # -------------------------------------------------------------
+        # Execute every requested tool.
+        # -------------------------------------------------------------
+
+        for tool_call in message.tool_calls:
+
+            tool_name = tool_call.function.name
+
+            try:
+                tool_input = json.loads(
+                    tool_call.function.arguments
                 )
+            except json.JSONDecodeError:
+                tool_input = {}
 
-        # Feed the tool results back to Claude and let the loop continue —
-        # it may call another tool, or now have enough info to answer.
-        messages.append({"role": "user", "content": tool_results})
+
+            result = _execute_tool(
+                tool_name,
+                tool_input
+            )
+
+
+            # Save tool call information for debugging/demo purposes.
+            tool_call_log.append(
+                {
+                    "tool": tool_name,
+                    "input": tool_input,
+                    "result": result,
+                }
+            )
+
+
+            # ---------------------------------------------------------
+            # Send the real Python tool result back to Groq.
+            # Groq can then decide whether another tool is needed or
+            # whether it can now answer the student.
+            # ---------------------------------------------------------
+
+            messages.append(
+                {
+                    "role": "tool",
+                    "tool_call_id": tool_call.id,
+                    "content": json.dumps(result),
+                }
+            )

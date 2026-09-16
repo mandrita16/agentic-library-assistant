@@ -1,160 +1,124 @@
 """
 agent/agent.py
 --------------
-
-LangGraph-based agent for MindSync.
+Groq-based agent for MindSync.
 
 Workflow:
 1. Receive the student's message.
-2. Send the message to Claude through LangChain.
-3. Claude decides whether a tool is required.
-4. LangGraph executes the selected tool.
-5. Tool results are returned to Claude.
-6. Claude can call additional tools when necessary.
-7. When no more tools are required, Claude produces the final answer.
+2. Send the message to Groq.
+3. Groq decides whether a tool is required.
+4. Execute the selected MindSync tool.
+5. Send the tool result back to Groq.
+6. Groq can call additional tools when necessary.
+7. When no more tools are required, Groq produces the final answer.
+
+The existing tools in app.agent.tools are reused.
 """
 
-from typing import Annotated, TypedDict
+import json
 
-from langchain_anthropic import ChatAnthropic
+from groq import Groq
 
-from langchain_core.messages import (
-    AIMessage,
-    BaseMessage,
-    HumanMessage,
-    SystemMessage,
-)
-
-from langgraph.graph import END, StateGraph
-from langgraph.graph.message import add_messages
-from langgraph.prebuilt import ToolNode
-
-from app.config import ANTHROPIC_API_KEY, CLAUDE_MODEL
+from app.config import GROQ_API_KEY, GROQ_MODEL
 from app.agent.prompts import SYSTEM_PROMPT
 from app.agent.tools import TOOLS
 
 
 # ===================================================================
-# MODEL
+# GROQ CLIENT
 # ===================================================================
 
-llm = ChatAnthropic(
-    model=CLAUDE_MODEL,
-    anthropic_api_key=ANTHROPIC_API_KEY,
-    max_tokens=2048,
+client = Groq(
+    api_key=GROQ_API_KEY
 )
 
-# Give Claude access to the MindSync tools.
-llm_with_tools = llm.bind_tools(TOOLS)
+
+# ===================================================================
+# TOOL REGISTRY
+# ===================================================================
+
+# Keep the existing LangChain tools and make them easy to execute
+# by name when Groq requests a function call.
+
+TOOL_REGISTRY = {
+    tool.name: tool
+    for tool in TOOLS
+}
 
 
 # ===================================================================
-# GRAPH STATE
+# CONVERT LANGCHAIN TOOLS TO GROQ TOOL SCHEMAS
 # ===================================================================
 
-class AgentState(TypedDict):
+def _build_tool_schemas():
     """
-    State maintained by LangGraph during a conversation.
-    """
-
-    messages: Annotated[
-        list[BaseMessage],
-        add_messages,
-    ]
-
-
-# ===================================================================
-# AGENT NODE
-# ===================================================================
-
-def agent_node(state: AgentState):
-    """
-    Ask Claude what should happen next.
-
-    Claude may either:
-    - produce a normal response, or
-    - request one or more tools.
+    Convert the existing LangChain @tool functions into the
+    OpenAI-compatible function schema expected by Groq.
     """
 
-    messages = [
-        SystemMessage(
-            content=SYSTEM_PROMPT
+    schemas = []
+
+    for tool in TOOLS:
+
+        # LangChain tools created with @tool expose their
+        # argument schema through args_schema.
+        parameters = tool.args_schema.model_json_schema()
+
+        schemas.append(
+            {
+                "type": "function",
+                "function": {
+                    "name": tool.name,
+                    "description": tool.description or "",
+                    "parameters": parameters,
+                },
+            }
         )
-    ] + state["messages"]
 
-    response = llm_with_tools.invoke(messages)
+    return schemas
 
-    return {
-        "messages": [response]
-    }
+
+GROQ_TOOLS = _build_tool_schemas()
 
 
 # ===================================================================
-# ROUTING
+# TOOL EXECUTION
 # ===================================================================
 
-def should_continue(state: AgentState):
+def _execute_tool(
+    name: str,
+    arguments: dict,
+) -> dict:
     """
-    Decide whether LangGraph should execute tools or finish.
-
-    If Claude requested a tool:
-        route to ToolNode.
-
-    Otherwise:
-        finish the graph.
+    Execute one of the existing MindSync LangChain tools.
     """
 
-    last_message = state["messages"][-1]
+    tool = TOOL_REGISTRY.get(name)
 
-    if isinstance(last_message, AIMessage):
-        if last_message.tool_calls:
-            return "tools"
+    if tool is None:
+        return {
+            "success": False,
+            "error": f"Unknown tool: {name}",
+        }
 
-    return END
+    try:
 
+        result = tool.invoke(arguments)
 
-# ===================================================================
-# TOOL NODE
-# ===================================================================
+        # Most MindSync tools already return dictionaries.
+        if isinstance(result, dict):
+            return result
 
-tool_node = ToolNode(TOOLS)
+        return {
+            "result": result
+        }
 
+    except Exception as exc:
 
-# ===================================================================
-# BUILD LANGGRAPH
-# ===================================================================
-
-workflow = StateGraph(AgentState)
-
-workflow.add_node(
-    "agent",
-    agent_node,
-)
-
-workflow.add_node(
-    "tools",
-    tool_node,
-)
-
-workflow.set_entry_point("agent")
-
-workflow.add_conditional_edges(
-    "agent",
-    should_continue,
-    {
-        "tools": "tools",
-        END: END,
-    },
-)
-
-workflow.add_edge(
-    "tools",
-    "agent",
-)
-
-
-# Compile the graph.
-graph = workflow.compile()
+        return {
+            "success": False,
+            "error": str(exc),
+        }
 
 
 # ===================================================================
@@ -166,7 +130,7 @@ def run_agent(
     conversation_history: list[dict] | None = None,
 ) -> dict:
     """
-    Run the MindSync LangGraph agent.
+    Run the MindSync Groq agent.
 
     Parameters
     ----------
@@ -186,178 +150,176 @@ def run_agent(
         }
     """
 
-    messages: list[BaseMessage] = []
+    # ---------------------------------------------------------------
+    # BUILD MESSAGE HISTORY
+    # ---------------------------------------------------------------
 
-    # ---------------------------------------------------------------
-    # Convert existing history into LangChain messages
-    # ---------------------------------------------------------------
+    messages = []
 
     for message in conversation_history or []:
 
         role = message.get("role")
         content = message.get("content", "")
 
+        if role not in {"user", "assistant"}:
+            continue
+
         if not isinstance(content, str):
             continue
 
-        if role == "user":
-
-            messages.append(
-                HumanMessage(
-                    content=content,
-                )
-            )
-
-        elif role == "assistant":
-
-            messages.append(
-                AIMessage(
-                    content=content,
-                )
-            )
+        messages.append(
+            {
+                "role": role,
+                "content": content,
+            }
+        )
 
     # ---------------------------------------------------------------
-    # Add current user message
+    # CURRENT USER MESSAGE
     # ---------------------------------------------------------------
 
     messages.append(
-        HumanMessage(
-            content=user_message,
-        )
-    )
-
-    # ---------------------------------------------------------------
-    # Run LangGraph
-    # ---------------------------------------------------------------
-
-    result = graph.invoke(
         {
-            "messages": messages,
-        },
-        config={
-            # Prevent an uncontrolled agent/tool loop.
-            "recursion_limit": 20,
-        },
+            "role": "user",
+            "content": user_message,
+        }
     )
 
-    final_messages = result["messages"]
-
     # ---------------------------------------------------------------
-    # Extract final AI response
+    # TOOL CALL LOG
     # ---------------------------------------------------------------
 
-    reply = ""
-
-    for message in reversed(final_messages):
-
-        if not isinstance(message, AIMessage):
-            continue
-
-        # Ignore AI messages that are requesting tools.
-        if message.tool_calls:
-            continue
-
-        if isinstance(message.content, str):
-
-            reply = message.content
-
-        elif isinstance(message.content, list):
-
-            text_parts = []
-
-            for block in message.content:
-
-                if (
-                    isinstance(block, dict)
-                    and block.get("type") == "text"
-                ):
-                    text_parts.append(
-                        block.get("text", "")
-                    )
-
-            reply = "".join(text_parts)
-
-        break
+    tool_call_log = []
 
     # ---------------------------------------------------------------
-    # Collect tool calls
+    # AGENT LOOP
     # ---------------------------------------------------------------
 
-    tool_calls = []
+    for _ in range(10):
 
-    for message in final_messages:
-
-        if not isinstance(message, AIMessage):
-            continue
-
-        for call in message.tool_calls:
-
-            tool_calls.append(
+        response = client.chat.completions.create(
+            model=GROQ_MODEL,
+            messages=[
                 {
-                    "tool": call.get("name"),
-                    "input": call.get("args", {}),
+                    "role": "system",
+                    "content": SYSTEM_PROMPT,
+                },
+                *messages,
+            ],
+            tools=GROQ_TOOLS,
+            tool_choice="auto",
+            max_tokens=2048,
+        )
+
+        message = response.choices[0].message
+
+        # -----------------------------------------------------------
+        # NO TOOL CALL
+        # -----------------------------------------------------------
+
+        if not message.tool_calls:
+
+            reply = message.content or ""
+
+            final_history = list(messages)
+
+            final_history.append(
+                {
+                    "role": "assistant",
+                    "content": reply,
                 }
             )
 
-    # ---------------------------------------------------------------
-    # Build simple conversation history
-    # ---------------------------------------------------------------
+            return {
+                "reply": reply.strip(),
+                "history": final_history,
+                "tool_calls": tool_call_log,
+            }
 
-    history = []
+        # -----------------------------------------------------------
+        # ASSISTANT TOOL-CALL MESSAGE
+        # -----------------------------------------------------------
 
-    for message in final_messages:
+        assistant_tool_calls = []
 
-        if isinstance(message, HumanMessage):
+        for tool_call in message.tool_calls:
 
-            history.append(
+            assistant_tool_calls.append(
                 {
-                    "role": "user",
-                    "content": message.content,
+                    "id": tool_call.id,
+                    "type": "function",
+                    "function": {
+                        "name": tool_call.function.name,
+                        "arguments": tool_call.function.arguments,
+                    },
                 }
             )
 
-        elif isinstance(message, AIMessage):
+        messages.append(
+            {
+                "role": "assistant",
+                "content": message.content or "",
+                "tool_calls": assistant_tool_calls,
+            }
+        )
 
-            # Do not expose intermediate tool-call messages
-            # as normal assistant responses.
-            if message.tool_calls:
-                continue
+        # -----------------------------------------------------------
+        # EXECUTE TOOLS
+        # -----------------------------------------------------------
 
-            if isinstance(message.content, str):
+        for tool_call in message.tool_calls:
 
-                history.append(
-                    {
-                        "role": "assistant",
-                        "content": message.content,
-                    }
+            tool_name = tool_call.function.name
+            raw_arguments = tool_call.function.arguments
+
+            try:
+
+                arguments = json.loads(
+                    raw_arguments
                 )
 
-            elif isinstance(message.content, list):
+            except json.JSONDecodeError:
 
-                text_parts = []
+                arguments = {}
 
-                for block in message.content:
+            result = _execute_tool(
+                tool_name,
+                arguments,
+            )
 
-                    if (
-                        isinstance(block, dict)
-                        and block.get("type") == "text"
-                    ):
-                        text_parts.append(
-                            block.get("text", "")
-                        )
+            # Save tool execution for API/frontend/debugging.
+            tool_call_log.append(
+                {
+                    "tool": tool_name,
+                    "input": arguments,
+                    "result": result,
+                }
+            )
 
-                content = "".join(text_parts)
+            # -------------------------------------------------------
+            # SEND TOOL RESULT BACK TO GROQ
+            # -------------------------------------------------------
 
-                if content:
-                    history.append(
-                        {
-                            "role": "assistant",
-                            "content": content,
-                        }
-                    )
+            messages.append(
+                {
+                    "role": "tool",
+                    "tool_call_id": tool_call.id,
+                    "content": json.dumps(
+                        result,
+                        default=str,
+                    ),
+                }
+            )
+
+    # =================================================================
+    # SAFETY FALLBACK
+    # =================================================================
 
     return {
-        "reply": reply.strip(),
-        "history": history,
-        "tool_calls": tool_calls,
+        "reply": (
+            "I couldn't complete that request within the allowed "
+            "number of reasoning steps."
+        ),
+        "history": messages,
+        "tool_calls": tool_call_log,
     }

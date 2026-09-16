@@ -3,10 +3,6 @@ config.py
 ---------
 Single source of truth for all MindSync settings
 and library policy constants.
-
-Keeping policy numbers such as fine rate, loan period,
-and maximum renewals here means changing them for a
-real deployment never requires modifying service logic.
 """
 
 import os
@@ -38,17 +34,17 @@ MONGO_DB_NAME = os.getenv(
 
 
 # ============================================================
-# Anthropic / Claude Configuration
+# Groq AI Configuration
 # ============================================================
 
-ANTHROPIC_API_KEY = os.getenv(
-    "ANTHROPIC_API_KEY",
+GROQ_API_KEY = os.getenv(
+    "GROQ_API_KEY",
     ""
 )
 
-CLAUDE_MODEL = os.getenv(
-    "CLAUDE_MODEL",
-    "claude-sonnet-4-6"
+GROQ_MODEL = os.getenv(
+    "GROQ_MODEL",
+    "llama-3.3-70b-versatile"
 )
 
 
@@ -96,6 +92,8 @@ MAX_RENEWALS = int(
 FINE_PER_DAY = float(
     os.getenv("FINE_PER_DAY", "5")
 )
+
+
 # ============================================================
 # JWT Authentication Configuration
 # ============================================================
