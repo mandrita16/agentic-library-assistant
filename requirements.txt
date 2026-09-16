@@ -3,6 +3,7 @@ uvicorn[standard]
 
 pymongo
 python-dotenv
+groq
 
 langchain
 langchain-core

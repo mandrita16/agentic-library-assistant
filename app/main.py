@@ -109,6 +109,8 @@ def health_check():
     """
     Health check endpoint.
     """
+    base_dir = Path(__file__).resolve().parent.parent
+    frontend_file = base_dir / "static" / "index.html"
 
     return {
         "status": "healthy",
