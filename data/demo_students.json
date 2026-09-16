@@ -1,0 +1,32 @@
+[
+  {
+    "student_id": "STU001",
+    "name": "Aarav Sharma",
+    "department": "CSE",
+    "password": "demo123"
+  },
+  {
+    "student_id": "STU002",
+    "name": "Ananya Sen",
+    "department": "CSE",
+    "password": "demo123"
+  },
+  {
+    "student_id": "STU003",
+    "name": "Rohan Das",
+    "department": "IT",
+    "password": "demo123"
+  },
+  {
+    "student_id": "STU004",
+    "name": "Priya Mukherjee",
+    "department": "CSE",
+    "password": "demo123"
+  },
+  {
+    "student_id": "STU005",
+    "name": "Arjun Roy",
+    "department": "ECE",
+    "password": "demo123"
+  }
+]

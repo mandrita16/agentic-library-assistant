@@ -1,898 +1,685 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>LibroMind — HITK Library Assistant</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600;700&family=Outfit:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
-<style>
-/* ================================================================
-   DESIGN TOKENS
-   Aurora + glassmorphism, as requested — but the aurora hues are
-   pulled from the library itself (brass reading-lamp gold, deep
-   emerald banker's-lamp glass, and a muted indigo night sky) rather
-   than the generic cyan/violet "AI product" aurora. Everything sits
-   on a near-black base so the glass panels actually read as glass.
-================================================================ */
-:root {
-  --void: #0A0B14;
-  --void-2: #10111E;
-  --glass-bg: rgba(255,255,255,0.055);
-  --glass-bg-strong: rgba(255,255,255,0.09);
-  --glass-border: rgba(255,255,255,0.14);
-  --glass-border-bright: rgba(255,255,255,0.28);
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#090909">
+  <title>MindSync — Agentic Academic Assistant</title>
+  <meta name="description" content="MindSync — an agentic academic and smart library assistant.">
+  <style>
+    :root {
+      --black: #070707;
+      --black-2: #0d0d0f;
+      --panel: rgba(20, 20, 22, .82);
+      --panel-2: #121214;
+      --white: #f5f5f2;
+      --muted: #9a9a9f;
+      --muted-2: #66666d;
+      --red: #e21d2f;
+      --red-2: #ff3346;
+      --red-soft: rgba(226, 29, 47, .13);
+      --line: rgba(255,255,255,.10);
+      --line-strong: rgba(255,255,255,.17);
+      --success: #62d6a7;
+      --shadow: 0 24px 80px rgba(0,0,0,.45);
+      --radius: 18px;
+      --ease: cubic-bezier(.2,.8,.2,1);
+    }
 
-  --gold: #E3B04B;
-  --gold-soft: #F0C878;
-  --emerald: #33A186;
-  --emerald-soft: #55C4A8;
-  --indigo: #6E6BD6;
+    * { box-sizing: border-box; }
+    html, body { margin: 0; min-height: 100%; }
+    body {
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: var(--white);
+      background:
+        radial-gradient(circle at 78% 12%, rgba(226,29,47,.12), transparent 28%),
+        radial-gradient(circle at 8% 88%, rgba(226,29,47,.07), transparent 30%),
+        var(--black);
+      overflow-x: hidden;
+    }
 
-  --ink: #F3F1EA;
-  --muted: #9CA0BE;
-  --muted-2: #6D7092;
-  --error: #E8917C;
+    button, input, textarea { font: inherit; }
+    button { cursor: pointer; }
+    a { color: inherit; }
 
-  --font-display: 'Cormorant Garamond', Georgia, serif;
-  --font-body: 'Outfit', -apple-system, sans-serif;
-  --font-mono: 'IBM Plex Mono', 'Courier New', monospace;
+    .noise {
+      position: fixed; inset: 0; pointer-events: none; z-index: 0; opacity: .035;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    }
 
-  --ease: cubic-bezier(0.22, 1, 0.36, 1);
-}
+    .red-line {
+      position: fixed; left: 0; top: 0; bottom: 0; width: 3px;
+      background: linear-gradient(180deg, transparent, var(--red), transparent);
+      opacity: .8; z-index: 3;
+    }
 
-* { box-sizing: border-box; }
-html, body {
-  margin: 0; padding: 0; min-height: 100%;
-  font-family: var(--font-body);
-  color: var(--ink);
-  background: var(--void);
-  overflow-x: hidden;
-}
-button { font-family: inherit; }
-::selection { background: var(--gold); color: var(--void); }
-a { color: var(--emerald-soft); }
+    /* ---------- AUTH ---------- */
+    #authScreen {
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 28px;
+      position: relative;
+      z-index: 1;
+    }
 
-a:focus-visible, button:focus-visible, input:focus-visible {
-  outline: 2px solid var(--gold-soft);
-  outline-offset: 2px;
-}
+    .auth-shell {
+      width: min(1060px, 100%);
+      min-height: 650px;
+      display: grid;
+      grid-template-columns: 1.05fr .95fr;
+      border: 1px solid var(--line-strong);
+      border-radius: 26px;
+      overflow: hidden;
+      background: rgba(12,12,13,.86);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(24px);
+    }
 
-@media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after {
-    animation-duration: 0.001ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.001ms !important;
-  }
-}
+    .auth-story {
+      padding: 56px;
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      border-right: 1px solid var(--line);
+      overflow: hidden;
+    }
 
-/* ================================================================
-   AURORA BACKGROUND — fixed, sits behind every screen so the whole
-   app feels like one continuous space rather than page-per-page.
-================================================================ */
-#aurora {
-  position: fixed; inset: 0; z-index: 0; overflow: hidden;
-  background: radial-gradient(ellipse at 50% 0%, #141633 0%, var(--void) 60%);
-}
-.aurora-blob {
-  position: absolute; border-radius: 50%;
-  filter: blur(90px); opacity: 0.55; will-change: transform;
-}
-.blob-1 { width: 520px; height: 520px; background: var(--gold); top: -160px; left: -100px; animation: drift1 26s var(--ease) infinite alternate; opacity: 0.28; }
-.blob-2 { width: 600px; height: 600px; background: var(--emerald); bottom: -220px; right: -160px; animation: drift2 32s var(--ease) infinite alternate; opacity: 0.30; }
-.blob-3 { width: 460px; height: 460px; background: var(--indigo); top: 30%; right: 8%; animation: drift3 22s var(--ease) infinite alternate; opacity: 0.22; }
-@keyframes drift1 { from { transform: translate(0,0) scale(1); } to { transform: translate(60px,80px) scale(1.15); } }
-@keyframes drift2 { from { transform: translate(0,0) scale(1); } to { transform: translate(-70px,-40px) scale(1.1); } }
-@keyframes drift3 { from { transform: translate(0,0) scale(1); } to { transform: translate(-40px,60px) scale(0.9); } }
+    .auth-story::before {
+      content: "";
+      position: absolute;
+      width: 430px; height: 430px;
+      right: -170px; top: -170px;
+      border-radius: 50%;
+      border: 1px solid rgba(226,29,47,.35);
+      box-shadow:
+        0 0 0 42px rgba(226,29,47,.035),
+        0 0 0 84px rgba(226,29,47,.022);
+    }
 
-.particle {
-  position: absolute; width: 3px; height: 3px; border-radius: 50%;
-  background: var(--gold-soft); opacity: 0; will-change: transform, opacity;
-  animation: floatUp linear infinite;
-}
-@keyframes floatUp {
-  0% { transform: translateY(0) translateX(0); opacity: 0; }
-  10% { opacity: 0.5; }
-  90% { opacity: 0.3; }
-  100% { transform: translateY(-90vh) translateX(20px); opacity: 0; }
-}
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 11px;
+      font-weight: 800;
+      letter-spacing: -.03em;
+      font-size: 21px;
+    }
 
-/* ================================================================
-   SHARED GLASS PRIMITIVE
-================================================================ */
-.glass {
-  background: var(--glass-bg);
-  backdrop-filter: blur(22px) saturate(140%);
-  -webkit-backdrop-filter: blur(22px) saturate(140%);
-  border: 1px solid var(--glass-border);
-}
+    .brand-mark {
+      width: 31px; height: 31px;
+      display: grid; place-items: center;
+      border: 1px solid rgba(226,29,47,.7);
+      background: var(--red);
+      color: white;
+      font-weight: 900;
+      font-size: 13px;
+      transform: skew(-12deg);
+    }
 
-/* Magnetic + shine button, used everywhere an action is primary */
-.btn-magnetic {
-  position: relative; overflow: hidden;
-  border: none; cursor: pointer; font-family: inherit;
-  transition: transform 180ms var(--ease);
-  will-change: transform;
-}
-.btn-magnetic::after {
-  content: ''; position: absolute; inset: 0;
-  background: linear-gradient(115deg, transparent 30%, rgba(255,255,255,0.35) 45%, rgba(255,255,255,0.35) 50%, transparent 65%);
-  background-size: 220% 100%; background-position: 120% 0;
-  transition: background-position 550ms var(--ease);
-  pointer-events: none;
-}
-.btn-magnetic:hover::after { background-position: -20% 0; }
-.btn-magnetic:disabled { opacity: 0.55; cursor: not-allowed; transform: none !important; }
+    .brand-mark span { transform: skew(12deg); }
 
-/* ================================================================
-   AUTH SCREEN
-================================================================ */
-#authScreen {
-  position: relative; z-index: 1;
-  min-height: 100vh; display: flex; align-items: center; justify-content: center;
-  padding: 24px;
-}
-.auth-card-wrap { perspective: 1200px; }
-.auth-card {
-  position: relative;
-  width: 100%; max-width: 420px;
-  border-radius: 20px;
-  padding: 40px 38px 30px;
-  box-shadow: 0 30px 80px -20px rgba(0,0,0,0.6), 0 0 60px -10px rgba(227,176,75,0.08);
-  transform-style: preserve-3d;
-  transition: transform 260ms var(--ease), box-shadow 260ms var(--ease);
-}
-.auth-card::before {
-  content: ''; position: absolute; inset: 0; border-radius: 20px;
-  background: linear-gradient(140deg, rgba(255,255,255,0.10), transparent 45%);
-  pointer-events: none;
-}
+    .brand-meta {
+      color: var(--muted-2);
+      font-size: 10px;
+      letter-spacing: .15em;
+      text-transform: uppercase;
+      margin-top: 5px;
+    }
 
-.book-mark {
-  width: 34px; height: 34px; margin-bottom: 14px;
-  position: relative;
-}
-.book-mark svg { width: 100%; height: 100%; }
+    .story-copy { max-width: 560px; position: relative; z-index: 1; }
+    .eyebrow {
+      color: var(--red-2);
+      text-transform: uppercase;
+      letter-spacing: .18em;
+      font-size: 10px;
+      font-weight: 800;
+      margin-bottom: 16px;
+    }
 
-.auth-brand {
-  font-family: var(--font-display); font-weight: 700; font-size: 32px;
-  margin: 0 0 6px; letter-spacing: 0.01em;
-  background: linear-gradient(120deg, #FFF6E0, var(--gold-soft) 60%, #FFF6E0);
-  -webkit-background-clip: text; background-clip: text; color: transparent;
-}
-.auth-tagline { font-size: 13px; color: var(--muted); margin: 0 0 26px; line-height: 1.55; }
+    .story-copy h1 {
+      font-size: clamp(42px, 5vw, 70px);
+      line-height: .93;
+      letter-spacing: -.065em;
+      margin: 0 0 22px;
+      max-width: 570px;
+    }
 
-.auth-tabs {
-  position: relative; display: flex; margin-bottom: 26px;
-  background: rgba(255,255,255,0.04); border-radius: 12px; padding: 4px;
-}
-.auth-tab {
-  position: relative; z-index: 1; flex: 1; padding: 10px 0;
-  background: transparent; border: none; border-radius: 9px;
-  color: var(--muted); font-size: 13.5px; font-weight: 500;
-  cursor: pointer; transition: color 200ms;
-}
-.auth-tab.active { color: var(--void); }
-.auth-tab-glider {
-  position: absolute; top: 4px; bottom: 4px; left: 4px;
-  width: calc(50% - 4px); border-radius: 9px;
-  background: linear-gradient(135deg, var(--gold-soft), var(--gold));
-  transition: transform 320ms var(--ease);
-}
+    .story-copy h1 em {
+      color: var(--red-2);
+      font-style: normal;
+    }
 
-.form-morph { position: relative; overflow: hidden; }
-.form-panel {
-  transition: opacity 260ms var(--ease), transform 260ms var(--ease), max-height 320ms var(--ease);
-  max-height: 500px; opacity: 1; transform: translateX(0);
-}
-.form-panel.hide-left { opacity: 0; transform: translateX(-24px); max-height: 0; pointer-events: none; }
-.form-panel.hide-right { opacity: 0; transform: translateX(24px); max-height: 0; pointer-events: none; }
+    .story-copy p {
+      color: #b8b8bc;
+      font-size: 15px;
+      line-height: 1.7;
+      max-width: 510px;
+      margin: 0;
+    }
 
-.field { margin-bottom: 15px; }
-.field label { display: block; font-size: 11.5px; color: var(--muted); margin-bottom: 6px; letter-spacing: 0.02em; }
-.field-input-wrap { position: relative; }
-.field input {
-  width: 100%; padding: 12px 14px; font-size: 14px; font-family: inherit;
-  background: rgba(255,255,255,0.045); color: var(--ink);
-  border: 1px solid rgba(255,255,255,0.12); border-radius: 10px;
-  transition: border-color 200ms, box-shadow 200ms, background 200ms;
-}
-.field input::placeholder { color: var(--muted-2); }
-.field input:focus {
-  border-color: var(--gold-soft);
-  box-shadow: 0 0 0 3px rgba(227,176,75,0.15), 0 0 20px -4px rgba(227,176,75,0.35);
-  background: rgba(255,255,255,0.07);
-}
-.field.password .field-input-wrap input { padding-right: 42px; }
-.pw-toggle {
-  position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
-  background: none; border: none; cursor: pointer; padding: 6px;
-  color: var(--muted); transition: color 180ms, transform 220ms var(--ease);
-}
-.pw-toggle:hover { color: var(--gold-soft); }
-.pw-toggle svg { width: 17px; height: 17px; display: block; }
-.pw-toggle.toggled { transform: translateY(-50%) scale(1.15) rotate(-6deg); }
+    .outcreate {
+      border-left: 2px solid var(--red);
+      padding-left: 14px;
+      color: #d8d8da;
+      font-size: 12px;
+      line-height: 1.6;
+      max-width: 440px;
+    }
 
-.auth-submit {
-  width: 100%; padding: 13px; margin-top: 6px; border-radius: 10px;
-  background: linear-gradient(135deg, var(--gold-soft), var(--gold));
-  color: var(--void); font-size: 14.5px; font-weight: 600;
-}
-.auth-submit:hover { transform: translateY(-1px); box-shadow: 0 8px 24px -8px rgba(227,176,75,0.55); }
-.auth-submit:active { transform: translateY(0); }
+    .outcreate strong { color: white; }
 
-/* success state: form content swapped for a drawing checkmark */
-.auth-success {
-  display: none; flex-direction: column; align-items: center; justify-content: center;
-  padding: 30px 0 10px; gap: 14px;
-}
-.auth-success.show { display: flex; }
-.check-circle {
-  width: 64px; height: 64px; border-radius: 50%;
-  background: radial-gradient(circle, rgba(85,196,168,0.18), transparent 70%);
-  display: flex; align-items: center; justify-content: center;
-}
-.check-circle svg { width: 40px; height: 40px; }
-.check-circle path {
-  stroke: var(--emerald-soft); stroke-width: 2.4; fill: none;
-  stroke-linecap: round; stroke-linejoin: round;
-  stroke-dasharray: 40; stroke-dashoffset: 40;
-  animation: draw 480ms var(--ease) forwards 120ms;
-}
-@keyframes draw { to { stroke-dashoffset: 0; } }
-.auth-success p { font-size: 13.5px; color: var(--muted); margin: 0; }
+    .auth-panel {
+      padding: 52px 48px;
+      display: flex;
+      align-items: center;
+      background: linear-gradient(145deg, rgba(255,255,255,.025), rgba(255,255,255,.008));
+    }
 
-.auth-message {
-  font-size: 12.5px; margin-top: 14px; line-height: 1.5;
-  padding: 10px 13px; border-radius: 9px; display: none;
-}
-.auth-message.show { display: block; }
-.auth-message.error { background: rgba(232,145,124,0.12); color: var(--error); border: 1px solid rgba(232,145,124,0.25); }
-.auth-message.success { background: rgba(85,196,168,0.12); color: var(--emerald-soft); border: 1px solid rgba(85,196,168,0.25); }
+    .auth-form { width: 100%; max-width: 390px; margin: auto; }
+    .auth-form h2 {
+      font-size: 29px;
+      letter-spacing: -.04em;
+      margin: 0 0 7px;
+    }
 
-.auth-hint { font-size: 11px; color: var(--muted-2); margin-top: 20px; line-height: 1.6; border-top: 1px solid rgba(255,255,255,0.08); padding-top: 14px; }
-.auth-hint code { color: var(--muted); }
+    .auth-form .sub {
+      color: var(--muted);
+      font-size: 13px;
+      margin: 0 0 28px;
+      line-height: 1.55;
+    }
 
-/* ================================================================
-   MAIN APP
-================================================================ */
-#appScreen { position: relative; z-index: 1; display: none; height: 100vh; }
-#appScreen.show { display: flex; }
+    .tabs {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 5px;
+      padding: 4px;
+      background: #09090a;
+      border: 1px solid var(--line);
+      border-radius: 11px;
+      margin-bottom: 22px;
+    }
 
-#sidebar {
-  width: 288px; flex-shrink: 0; margin: 18px 0 18px 18px; border-radius: 18px;
-  display: flex; flex-direction: column; padding: 26px 22px; overflow-y: auto;
-}
+    .tab {
+      border: 0; background: transparent; color: var(--muted);
+      padding: 10px; border-radius: 8px; font-size: 12px; font-weight: 700;
+    }
 
-.brand-row { display: flex; align-items: center; gap: 10px; margin-bottom: 26px; }
-.brand-mark-sm { width: 26px; height: 26px; }
-.brand-mark-sm svg { width: 100%; height: 100%; }
-.brand-text { font-family: var(--font-display); font-weight: 700; font-size: 21px;
-  background: linear-gradient(120deg, #FFF6E0, var(--gold-soft));
-  -webkit-background-clip: text; background-clip: text; color: transparent;
-}
+    .tab.active { background: var(--white); color: #0b0b0c; }
 
-.library-card {
-  border-radius: 14px; padding: 16px 16px 14px; margin-bottom: 16px;
-  background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.10);
-}
-.library-card .card-label { font-size: 10px; color: var(--muted-2); letter-spacing: 0.04em; margin: 0 0 8px; }
-.library-card .card-name { font-family: var(--font-display); font-size: 18px; font-weight: 700; color: var(--ink); margin: 0 0 2px; }
-.library-card .card-meta { font-size: 12px; color: var(--muted); margin: 0; }
+    .field { margin-bottom: 15px; }
+    .field label {
+      display: block; color: #b5b5b9; font-size: 11px;
+      font-weight: 700; margin-bottom: 7px;
+    }
 
-.stat-row { display: flex; justify-content: space-between; align-items: baseline; padding: 9px 0; border-bottom: 1px solid rgba(255,255,255,0.07); font-size: 13px; }
-.stat-row:last-child { border-bottom: none; }
-.stat-row .stat-label { color: var(--muted); }
-.stat-row .stat-value { font-family: var(--font-mono); font-weight: 500; color: var(--ink); }
-.stat-value.warn { color: var(--gold-soft); }
+    .field input {
+      width: 100%; height: 46px;
+      border: 1px solid var(--line-strong);
+      background: #0b0b0c; color: white;
+      border-radius: 10px; padding: 0 13px;
+      outline: none; transition: .2s;
+    }
 
-.sidebar-actions { margin-top: auto; padding-top: 16px; display: flex; flex-direction: column; gap: 8px; }
-.sidebar-btn {
-  background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.10); border-radius: 10px;
-  color: var(--muted); padding: 10px 12px; font-size: 12.5px; cursor: pointer; text-align: left;
-  transition: border-color 180ms, color 180ms, background 180ms;
-}
-.sidebar-btn:hover { border-color: var(--gold-soft); color: var(--ink); background: rgba(255,255,255,0.06); }
+    .field input:focus {
+      border-color: var(--red);
+      box-shadow: 0 0 0 3px rgba(226,29,47,.12);
+    }
 
-/* --- Chat area --- */
-#chatArea { flex: 1; display: flex; flex-direction: column; min-width: 0; margin: 18px 18px 18px 14px; border-radius: 18px; overflow: hidden; }
+    .primary-btn {
+      width: 100%; height: 48px; border: 0; border-radius: 10px;
+      background: var(--red); color: white; font-weight: 800;
+      transition: transform .18s var(--ease), background .18s;
+    }
 
-#chatHeader { padding: 20px 28px; border-bottom: 1px solid rgba(255,255,255,0.08); display: flex; align-items: center; gap: 14px; }
+    .primary-btn:hover { background: var(--red-2); transform: translateY(-1px); }
+    .primary-btn:disabled { opacity: .55; cursor: not-allowed; transform: none; }
 
-/* --- The assistant avatar: an animated open book, not a chat bubble icon --- */
-.avatar-book { width: 40px; height: 40px; flex-shrink: 0; position: relative; }
-.avatar-book svg { width: 100%; height: 100%; overflow: visible; }
-.avatar-glow {
-  position: absolute; inset: -8px; border-radius: 50%;
-  background: radial-gradient(circle, rgba(227,176,75,0.35), transparent 70%);
-  opacity: 0.5; transition: opacity 300ms;
-}
-.avatar-book.state-idle .avatar-glow { animation: glowPulse 3.2s ease-in-out infinite; }
-.avatar-book.state-thinking .avatar-glow { opacity: 0.9; animation: glowPulse 0.9s ease-in-out infinite; }
-.avatar-book.state-responding .avatar-glow { opacity: 1; }
-@keyframes glowPulse { 0%,100% { opacity: 0.35; } 50% { opacity: 0.65; } }
+    .auth-message {
+      display: none; margin-top: 14px; padding: 11px 12px;
+      border-radius: 9px; font-size: 12px; line-height: 1.5;
+      border: 1px solid rgba(226,29,47,.25); background: var(--red-soft);
+      color: #ff9aa5;
+    }
+    .auth-message.show { display: block; }
+    .auth-message.success {
+      border-color: rgba(98,214,167,.25);
+      background: rgba(98,214,167,.08);
+      color: var(--success);
+    }
 
-.page-left, .page-right { transform-origin: bottom center; transition: transform 260ms var(--ease); }
-.avatar-book.state-idle .page-right { animation: pageDrift 3.4s ease-in-out infinite; }
-@keyframes pageDrift { 0%,100% { transform: rotateY(0deg); } 50% { transform: rotateY(-6deg); } }
-.avatar-book.state-thinking .page-right { animation: pageFlip 0.55s ease-in-out infinite; }
-@keyframes pageFlip { 0% { transform: rotateY(0deg) scaleX(1); } 50% { transform: rotateY(-45deg) scaleX(0.7); } 100% { transform: rotateY(0deg) scaleX(1); } }
-.avatar-book.state-responding .page-right { transform: rotateY(-3deg); }
+    .auth-note {
+      color: var(--muted-2); font-size: 10px; line-height: 1.6;
+      margin-top: 22px; text-align: center;
+    }
 
-#chatHeader h1 { font-family: var(--font-display); font-size: 19px; font-weight: 700; margin: 0; }
-#chatHeader .subtitle { font-size: 12px; color: var(--muted); margin-top: 1px; }
+    /* ---------- APP ---------- */
+    #appScreen { display: none; min-height: 100vh; position: relative; z-index: 1; }
+    #appScreen.show { display: grid; grid-template-columns: 255px 1fr; }
 
-#messages { flex: 1; overflow-y: auto; padding: 26px 28px 8px; display: flex; flex-direction: column; gap: 18px; }
+    .sidebar {
+      min-height: 100vh; border-right: 1px solid var(--line);
+      background: rgba(8,8,9,.92); padding: 25px 17px;
+      display: flex; flex-direction: column;
+    }
 
-.msg-row { display: flex; }
-.msg-row.user { justify-content: flex-end; }
-.msg-row.assistant { justify-content: flex-start; }
+    .sidebar .brand { padding: 0 8px 28px; }
+    .side-label {
+      color: #56565d; text-transform: uppercase; letter-spacing: .16em;
+      font-size: 9px; font-weight: 800; padding: 0 10px 9px;
+    }
 
-.bubble { max-width: 64%; padding: 13px 17px; font-size: 14px; line-height: 1.55; border-radius: 16px; animation: rise 320ms var(--ease); }
-@keyframes rise { from { opacity: 0; transform: translateY(10px) scale(0.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
-.msg-row.user .bubble { background: linear-gradient(135deg, #2A2C46, #1D1E33); color: var(--ink); border: 1px solid rgba(255,255,255,0.08); border-bottom-right-radius: 4px; }
-.msg-row.assistant .bubble { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-bottom-left-radius: 4px; backdrop-filter: blur(10px); }
+    .nav { display: grid; gap: 5px; }
+    .nav-btn {
+      border: 1px solid transparent; background: transparent; color: #9b9ba0;
+      padding: 11px 11px; border-radius: 9px; text-align: left; font-size: 12px;
+    }
+    .nav-btn.active, .nav-btn:hover {
+      color: white; background: rgba(255,255,255,.045); border-color: var(--line);
+    }
+    .nav-btn.active { border-left: 2px solid var(--red); }
 
-/* Book-result cards — where search/recommend tool output becomes tactile */
-.book-cards { display: flex; flex-wrap: wrap; gap: 12px; max-width: 82%; margin-top: 4px; perspective: 900px; }
-.book-card {
-  width: 168px; border-radius: 12px; padding: 14px 14px 12px;
-  background: linear-gradient(160deg, rgba(255,255,255,0.07), rgba(255,255,255,0.02));
-  border: 1px solid rgba(255,255,255,0.12);
-  transform-style: preserve-3d; transition: transform 220ms var(--ease), box-shadow 220ms var(--ease), border-color 220ms;
-  opacity: 0; animation: cardIn 420ms var(--ease) forwards;
-  cursor: default;
-}
-@keyframes cardIn { from { opacity: 0; transform: translateY(14px) rotateX(-8deg); } to { opacity: 1; transform: translateY(0) rotateX(0); } }
-.book-card:hover { border-color: rgba(227,176,75,0.5); box-shadow: 0 16px 34px -14px rgba(227,176,75,0.3); }
-.book-card .spine { width: 26px; height: 3px; border-radius: 2px; background: linear-gradient(90deg, var(--gold-soft), var(--emerald-soft)); margin-bottom: 10px; }
-.book-card .b-title { font-family: var(--font-display); font-weight: 700; font-size: 14.5px; line-height: 1.25; margin: 0 0 5px; }
-.book-card .b-meta { font-size: 10.5px; color: var(--muted); line-height: 1.5; }
-.book-card .b-avail { display: inline-block; margin-top: 8px; font-size: 10px; font-family: var(--font-mono); padding: 3px 8px; border-radius: 20px; }
-.book-card .b-avail.yes { background: rgba(85,196,168,0.15); color: var(--emerald-soft); }
-.book-card .b-avail.no { background: rgba(232,145,124,0.15); color: var(--error); }
+    .library-mini {
+      margin-top: 26px; padding: 15px; border: 1px solid var(--line);
+      border-radius: 13px; background: rgba(255,255,255,.025);
+    }
+    .library-mini .small { color: var(--muted-2); font-size: 9px; text-transform: uppercase; letter-spacing: .13em; }
+    .library-mini .name { margin-top: 7px; font-weight: 800; font-size: 14px; }
+    .library-mini .id { color: var(--muted); font-size: 10px; margin-top: 3px; }
 
-.trace { max-width: 64%; margin-top: 2px; font-family: var(--font-mono); font-size: 10.5px; color: var(--muted); background: rgba(0,0,0,0.2); border: 1px dashed rgba(255,255,255,0.14); border-radius: 8px; padding: 8px 12px; }
-.trace summary { cursor: pointer; color: var(--emerald-soft); font-weight: 500; }
-.trace .call { margin-top: 5px; padding-top: 5px; border-top: 1px dashed rgba(255,255,255,0.1); }
-.trace .call:first-of-type { border-top: none; margin-top: 3px; }
+    .side-bottom { margin-top: auto; display: grid; gap: 8px; }
+    .side-btn {
+      border: 1px solid var(--line); background: transparent; color: #99999f;
+      padding: 10px; border-radius: 9px; text-align: left; font-size: 11px;
+    }
+    .side-btn:hover { color: white; border-color: var(--line-strong); }
 
-#inputBar { display: flex; gap: 10px; padding: 18px 24px 20px; border-top: 1px solid rgba(255,255,255,0.08); }
-#messageInput { flex: 1; padding: 13px 16px; font-size: 14px; font-family: inherit; border-radius: 12px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.12); color: var(--ink); transition: border-color 200ms, box-shadow 200ms; }
-#messageInput::placeholder { color: var(--muted-2); }
-#messageInput:focus { border-color: var(--gold-soft); box-shadow: 0 0 0 3px rgba(227,176,75,0.14); }
-#sendBtn { padding: 0 24px; border-radius: 12px; background: linear-gradient(135deg, var(--emerald-soft), var(--emerald)); color: var(--void); font-size: 14px; font-weight: 600; }
-#sendBtn:hover { transform: translateY(-1px); box-shadow: 0 8px 22px -8px rgba(51,161,134,0.6); }
+    .main {
+      min-width: 0; display: flex; flex-direction: column; min-height: 100vh;
+    }
 
-.empty-state { margin: auto; text-align: center; max-width: 380px; color: var(--muted); }
-.empty-state h2 { font-family: var(--font-display); font-size: 21px; color: var(--ink); margin-bottom: 8px; font-weight: 700; }
-.empty-state p { font-size: 13.5px; line-height: 1.6; }
+    .topbar {
+      height: 68px; border-bottom: 1px solid var(--line);
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 30px; background: rgba(7,7,7,.7); backdrop-filter: blur(18px);
+      position: sticky; top: 0; z-index: 5;
+    }
 
-@media (max-width: 780px) {
-  #appScreen.show { flex-direction: column; height: auto; min-height: 100vh; }
-  #sidebar { width: auto; margin: 12px; flex-direction: row; flex-wrap: wrap; align-items: center; }
-  .brand-row { width: 100%; }
-  .library-card { flex: 1 1 100%; margin-bottom: 10px; }
-  .sidebar-actions { margin-top: 10px; flex-direction: row; width: 100%; }
-  #chatArea { margin: 0 12px 12px; }
-  .bubble, .trace, .book-cards { max-width: 92%; }
-}
-</style>
+    .top-title { font-size: 12px; font-weight: 800; letter-spacing: .01em; }
+    .top-title span { color: var(--muted); font-weight: 500; }
+    .status { display: flex; align-items: center; gap: 7px; color: var(--muted); font-size: 10px; }
+    .status-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--success); box-shadow: 0 0 12px rgba(98,214,167,.65); }
+
+    .workspace {
+      flex: 1; display: flex; flex-direction: column; width: min(980px, 100%);
+      margin: 0 auto; padding: 54px 30px 28px;
+    }
+
+    .welcome { margin-bottom: 30px; }
+    .welcome .kicker { color: var(--red-2); font-size: 10px; text-transform: uppercase; letter-spacing: .18em; font-weight: 800; }
+    .welcome h2 { margin: 9px 0 9px; font-size: clamp(31px, 4vw, 52px); line-height: .98; letter-spacing: -.06em; }
+    .welcome p { margin: 0; color: var(--muted); font-size: 13px; }
+
+    .dashboard-strip {
+      display: grid; grid-template-columns: repeat(4, 1fr);
+      gap: 9px; margin-bottom: 28px;
+    }
+
+    .stat {
+      border: 1px solid var(--line); background: rgba(255,255,255,.025);
+      border-radius: 12px; padding: 13px 14px;
+    }
+    .stat .label { color: var(--muted-2); font-size: 9px; text-transform: uppercase; letter-spacing: .11em; }
+    .stat .value { margin-top: 7px; font-size: 20px; font-weight: 800; letter-spacing: -.04em; }
+    .stat.warn .value { color: #ff6d79; }
+
+    #messages {
+      flex: 1; min-height: 280px; overflow-y: auto;
+      display: flex; flex-direction: column; gap: 16px;
+      padding: 5px 2px 16px; scroll-behavior: smooth;
+    }
+
+    .empty {
+      margin: auto; text-align: center; max-width: 590px; padding: 30px 10px;
+    }
+    .empty-mark {
+      width: 46px; height: 46px; margin: 0 auto 18px;
+      border: 1px solid rgba(226,29,47,.55); color: var(--red-2);
+      display: grid; place-items: center; font-weight: 900; font-size: 14px;
+      transform: skew(-10deg);
+    }
+    .empty h3 { margin: 0 0 9px; font-size: 22px; letter-spacing: -.035em; }
+    .empty p { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.7; }
+    .suggestions { display: flex; flex-wrap: wrap; justify-content: center; gap: 7px; margin-top: 18px; }
+    .suggestion {
+      border: 1px solid var(--line); background: rgba(255,255,255,.025);
+      color: #bdbdc2; border-radius: 999px; padding: 8px 11px; font-size: 10px;
+    }
+    .suggestion:hover { border-color: rgba(226,29,47,.45); color: white; }
+
+    .msg-row { display: flex; }
+    .msg-row.user { justify-content: flex-end; }
+    .bubble {
+      max-width: min(720px, 86%); padding: 12px 15px; border-radius: 14px;
+      font-size: 13px; line-height: 1.65; white-space: pre-wrap;
+      border: 1px solid var(--line);
+    }
+    .user .bubble { background: #171719; border-color: var(--line-strong); border-bottom-right-radius: 4px; }
+    .assistant .bubble { background: rgba(255,255,255,.035); border-bottom-left-radius: 4px; }
+
+    .book-cards {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 9px; margin: -5px 0 2px;
+    }
+    .book-card {
+      border: 1px solid var(--line); border-radius: 12px; padding: 14px;
+      background: linear-gradient(145deg, rgba(255,255,255,.045), rgba(255,255,255,.012));
+    }
+    .book-card:hover { border-color: rgba(226,29,47,.42); }
+    .book-accent { width: 22px; height: 3px; background: var(--red); margin-bottom: 11px; }
+    .book-title { font-weight: 800; font-size: 12px; line-height: 1.35; }
+    .book-meta { color: var(--muted); font-size: 9px; margin-top: 6px; line-height: 1.5; }
+    .availability {
+      display: inline-block; margin-top: 9px; font-size: 9px; padding: 4px 7px;
+      border-radius: 999px; background: rgba(255,255,255,.06); color: var(--muted);
+    }
+    .availability.yes { color: var(--success); background: rgba(98,214,167,.08); }
+    .availability.no { color: #ff7b86; background: rgba(226,29,47,.09); }
+
+    .tool-activity {
+      border: 1px dashed var(--line-strong); border-radius: 9px;
+      overflow: hidden; font-size: 10px; color: var(--muted);
+    }
+    .tool-activity summary { padding: 8px 10px; cursor: pointer; color: #b7b7bc; }
+    .tool-item { padding: 8px 10px; border-top: 1px dashed var(--line); font-family: ui-monospace, monospace; }
+
+    .composer {
+      position: sticky; bottom: 0; padding-top: 13px;
+      background: linear-gradient(180deg, transparent, var(--black) 30%);
+    }
+    .composer-box {
+      display: flex; gap: 8px; padding: 7px; border: 1px solid var(--line-strong);
+      border-radius: 14px; background: rgba(16,16,17,.92);
+      box-shadow: 0 16px 45px rgba(0,0,0,.32);
+    }
+    #messageInput {
+      flex: 1; min-width: 0; border: 0; outline: 0; background: transparent;
+      color: white; padding: 10px 11px; font-size: 12px;
+    }
+    #messageInput::placeholder { color: #626269; }
+    #sendBtn {
+      border: 0; background: var(--red); color: white; border-radius: 9px;
+      padding: 0 18px; font-size: 11px; font-weight: 800;
+    }
+    #sendBtn:hover { background: var(--red-2); }
+    #sendBtn:disabled { opacity: .45; cursor: not-allowed; }
+
+    .footer-note { text-align: center; color: #4d4d52; font-size: 9px; margin-top: 9px; }
+
+    @media (max-width: 820px) {
+      .auth-shell { grid-template-columns: 1fr; }
+      .auth-story { min-height: 310px; padding: 34px; border-right: 0; border-bottom: 1px solid var(--line); }
+      .auth-panel { padding: 34px 25px; }
+      #appScreen.show { grid-template-columns: 1fr; }
+      .sidebar { min-height: auto; border-right: 0; border-bottom: 1px solid var(--line); padding: 14px; }
+      .sidebar .brand { padding-bottom: 13px; }
+      .nav { grid-template-columns: repeat(3, 1fr); }
+      .nav-btn { text-align: center; }
+      .library-mini { display: none; }
+      .side-bottom { display: flex; }
+      .topbar { padding: 0 16px; }
+      .workspace { padding: 35px 16px 20px; }
+    }
+
+    @media (max-width: 560px) {
+      #authScreen { padding: 12px; }
+      .auth-story { padding: 28px 22px; }
+      .story-copy h1 { font-size: 42px; }
+      .dashboard-strip { grid-template-columns: repeat(2, 1fr); }
+      .bubble { max-width: 94%; }
+      .nav { grid-template-columns: 1fr 1fr; }
+      .status { display: none; }
+    }
+  
+    /* ---------- LIBRARY-FIRST UI ---------- */
+    .library-actions { margin-top: 4px; }
+    .section-heading { display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; }
+    .section-heading span { color:#77777d; font-size:9px; font-weight:800; letter-spacing:.16em; }
+    .section-heading small { color:#55555b; font-size:10px; }
+    .action-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:9px; }
+    .action-card { min-height:82px; text-align:left; border:1px solid var(--line); background:rgba(255,255,255,.025); color:white; border-radius:12px; padding:14px; transition:.2s; }
+    .action-card:hover { border-color:rgba(226,29,47,.45); background:rgba(226,29,47,.055); transform:translateY(-2px); }
+    .action-card strong { display:block; font-size:12px; margin-bottom:7px; }
+    .action-card span { display:block; color:var(--muted); font-size:10px; line-height:1.45; }
+    .chat-results { margin-top:0; }
+    .auth-form.register-mode h2 { font-size:27px; }
+    @media (max-width: 900px) { .action-grid { grid-template-columns:repeat(2,1fr); } }
+    @media (max-width: 620px) { .action-grid { grid-template-columns:1fr; } }
+
+  
+    /* ---------- FINAL FRONTEND FIXES ---------- */
+    #authScreen { display: none; }
+    #authScreen.active { display: grid; }
+
+    .chat-message { display:flex; gap:10px; width:100%; }
+    .chat-message.user { justify-content:flex-end; }
+    .chat-message.user .chat-bubble { background:#171719; border:1px solid var(--line-strong); border-radius:14px 14px 4px 14px; }
+    .chat-message.assistant { align-items:flex-start; }
+    .assistant-mark { flex:0 0 30px; width:30px; height:30px; display:grid; place-items:center; background:var(--red); color:white; font-size:9px; font-weight:900; transform:skew(-8deg); }
+    .chat-response { max-width:min(760px,88%); }
+    .chat-label { color:#6d6d73; font-size:8px; font-weight:800; letter-spacing:.14em; margin-bottom:5px; }
+    .chat-bubble { padding:12px 14px; border:1px solid var(--line); border-radius:14px 14px 14px 4px; background:rgba(255,255,255,.035); color:#dedee1; font-size:12px; line-height:1.65; }
+    .chat-bubble strong { color:white; }
+    .chat-bubble code { background:rgba(255,255,255,.08); padding:2px 5px; border-radius:4px; font-family:ui-monospace,monospace; }
+    .typing { display:flex; gap:4px; align-items:center; min-width:55px; padding:13px 14px; border:1px solid var(--line); border-radius:14px 14px 14px 4px; background:rgba(255,255,255,.035); }
+    .typing span { width:5px; height:5px; border-radius:50%; background:#999; animation:typingPulse 1s infinite ease-in-out; }
+    .typing span:nth-child(2) { animation-delay:.15s; }
+    .typing span:nth-child(3) { animation-delay:.3s; }
+    @keyframes typingPulse { 0%,60%,100%{opacity:.3;transform:translateY(0)} 30%{opacity:1;transform:translateY(-3px)} }
+    .chat-results { margin:0 0 10px; }
+    .result-heading { color:#77777d; font-size:9px; font-weight:800; letter-spacing:.15em; margin-bottom:9px; }
+    .result-heading span { color:#55555b; font-weight:500; letter-spacing:0; margin-left:8px; }
+    .result-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:9px; }
+    .result-card { display:flex; gap:11px; border:1px solid var(--line); background:rgba(255,255,255,.025); border-radius:12px; padding:11px; transition:.2s; }
+    .result-card:hover { border-color:rgba(226,29,47,.4); }
+    .result-cover { flex:0 0 40px; height:54px; display:grid; place-items:center; background:#18181a; border:1px solid var(--line-strong); color:var(--red-2); font-weight:900; font-size:16px; }
+    .result-info { min-width:0; }
+    .result-info small { color:#55555b; font-size:8px; }
+    .result-info h3 { margin:3px 0 3px; font-size:11px; line-height:1.35; }
+    .result-info p { margin:0; color:var(--muted); font-size:9px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .result-info > span { display:inline-block; margin-top:6px; color:#9c9ca1; font-size:8px; }
+    .result-info .availability { margin-top:6px; }
+    .tool-item { display:flex; align-items:center; gap:7px; }
+    .tool-status { width:5px; height:5px; flex:0 0 5px; border-radius:50%; background:var(--success); }
+
+    @media (max-width: 820px) {
+      .auth-story { min-height:260px; }
+      .story-copy h1 { font-size:48px; }
+      .auth-panel { padding:38px 30px; }
+    }
+
+  </style>
 </head>
 <body>
+  <div class="noise"></div>
+  <div class="red-line"></div>
 
-<div id="aurora">
-  <div class="aurora-blob blob-1"></div>
-  <div class="aurora-blob blob-2"></div>
-  <div class="aurora-blob blob-3"></div>
-  <div id="particleField"></div>
-</div>
-
-<!-- ============================================================
-     AUTH SCREEN
-============================================================ -->
-<div id="authScreen">
-  <div class="auth-card-wrap">
-    <div class="glass auth-card" id="authCard">
-      <div class="book-mark">
-        <svg viewBox="0 0 32 32" fill="none">
-          <path d="M4 6 C10 3, 14 3, 16 6 C18 3, 22 3, 28 6 V26 C22 23, 18 23, 16 26 C14 23, 10 23, 4 26 Z" stroke="url(#g1)" stroke-width="1.6" stroke-linejoin="round"/>
-          <path d="M16 6 V26" stroke="url(#g1)" stroke-width="1.2" opacity="0.7"/>
-          <defs><linearGradient id="g1" x1="4" y1="3" x2="28" y2="26"><stop stop-color="#F0C878"/><stop offset="1" stop-color="#55C4A8"/></linearGradient></defs>
-        </svg>
-      </div>
-      <p class="auth-brand">LibroMind</p>
-      <p class="auth-tagline">The HITK library, searchable by meaning. Sign in to begin.</p>
-
-      <div class="auth-tabs">
-        <div class="auth-tab-glider" id="tabGlider"></div>
-        <button class="auth-tab active" id="tabLogin" onclick="switchTab('login')">Sign in</button>
-        <button class="auth-tab" id="tabRegister" onclick="switchTab('register')">New member</button>
-      </div>
-
-      <div class="form-morph">
-        <form id="loginForm" class="form-panel" onsubmit="return handleLogin(event)">
-          <div class="field">
-            <label for="loginStudentId">Student ID</label>
-            <div class="field-input-wrap"><input id="loginStudentId" placeholder="e.g. S12345" required autocomplete="username"></div>
-          </div>
-          <div class="field password">
-            <label for="loginPassword">Password</label>
-            <div class="field-input-wrap">
-              <input id="loginPassword" type="password" placeholder="••••••••" required autocomplete="current-password">
-              <button type="button" class="pw-toggle" onclick="togglePw('loginPassword', this)" aria-label="Show password">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7Z"/><circle cx="12" cy="12" r="3"/></svg>
-              </button>
+  <!-- ==================== AUTH ==================== -->
+  <section id="authScreen" class="screen active">
+    <div class="auth-shell">
+      <div class="auth-story">
+        <div>
+          <div class="brand">
+            <div class="brand-mark"><span>MS</span></div>
+            <div>
+              MindSync
+              <div class="brand-meta">Smart Library Assistant</div>
             </div>
           </div>
-          <button class="btn-magnetic auth-submit" type="submit" id="loginSubmitBtn">Sign in</button>
-        </form>
+        </div>
 
-        <form id="registerForm" class="form-panel hide-right" style="display:none" onsubmit="return handleRegister(event)">
-          <div class="field">
-            <label for="regStudentId">Student ID</label>
-            <div class="field-input-wrap"><input id="regStudentId" placeholder="e.g. S12345" required></div>
+        <div class="story-copy">
+          <div class="eyebrow">HITK · SMART LIBRARY</div>
+          <h1>Find the right <em>book.</em><br>Make your library smarter.</h1>
+          <p>
+            MindSync brings your academic library into one intelligent experience —
+            discover books, check live availability, borrow, renew, reserve, and
+            get personalized recommendations through natural conversation.
+          </p>
+          <div class="outcreate">
+            <strong>Smart library. Intelligent assistance.</strong><br>
+            Designed around the library first, with an agentic AI layer that helps
+            students discover and use academic resources more effectively.
           </div>
-          <div class="field">
-            <label for="regName">Full name</label>
-            <div class="field-input-wrap"><input id="regName" placeholder="e.g. Mandrita Roy" required></div>
-          </div>
-          <div class="field">
-            <label for="regDept">Department</label>
-            <div class="field-input-wrap"><input id="regDept" placeholder="e.g. CSE" required></div>
-          </div>
-          <div class="field password">
-            <label for="regPassword">Password</label>
-            <div class="field-input-wrap">
-              <input id="regPassword" type="password" placeholder="At least 6 characters" required minlength="6" autocomplete="new-password">
-              <button type="button" class="pw-toggle" onclick="togglePw('regPassword', this)" aria-label="Show password">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7Z"/><circle cx="12" cy="12" r="3"/></svg>
-              </button>
-            </div>
-          </div>
-          <button class="btn-magnetic auth-submit" type="submit" id="registerSubmitBtn">Create account</button>
-        </form>
-
-        <div class="auth-success" id="authSuccess">
-          <div class="check-circle"><svg viewBox="0 0 24 24"><path d="M4 12.5 L9.5 18 L20 6"/></svg></div>
-          <p id="successText">Welcome back.</p>
         </div>
       </div>
 
-      <div class="auth-message" id="authMessage"></div>
+      <div class="auth-panel">
+        <div class="auth-form">
+          <div class="eyebrow" id="authEyebrow">HITK · STUDENT LIBRARY ACCESS</div>
+          <h2 id="authTitle">Welcome to MindSync Library</h2>
+          <p class="sub" id="authSubtitle">Sign in to search, borrow, reserve, and manage your library books.</p>
 
-      <p class="auth-hint">Librarian? Admin accounts use <code>POST /auth/admin/register</code> with your setup key, then <code>/admin/*</code> in <a href="/docs">/docs</a>.</p>
-    </div>
-  </div>
-</div>
+          <div class="tabs">
+            <button type="button" class="tab active" id="loginTab" onclick="switchAuth('login')">Sign in</button>
+            <button type="button" class="tab" id="registerTab" onclick="switchAuth('register')">Create account</button>
+          </div>
 
-<!-- ============================================================
-     MAIN APP
-============================================================ -->
-<div id="appScreen">
-  <aside id="sidebar" class="glass">
-    <div class="brand-row">
-      <div class="brand-mark-sm">
-        <svg viewBox="0 0 32 32" fill="none">
-          <path d="M4 6 C10 3, 14 3, 16 6 C18 3, 22 3, 28 6 V26 C22 23, 18 23, 16 26 C14 23, 10 23, 4 26 Z" stroke="url(#g2)" stroke-width="1.8" stroke-linejoin="round"/>
-          <defs><linearGradient id="g2" x1="4" y1="3" x2="28" y2="26"><stop stop-color="#F0C878"/><stop offset="1" stop-color="#55C4A8"/></linearGradient></defs>
-        </svg>
-      </div>
-      <span class="brand-text">LibroMind</span>
-    </div>
+          <form id="loginForm" onsubmit="return handleLogin(event)">
+            <div class="field">
+              <label for="loginStudentId">Student ID</label>
+              <input id="loginStudentId" autocomplete="username" placeholder="e.g. STU001" required>
+            </div>
+            <div class="field">
+              <label for="loginPassword">Password</label>
+              <input id="loginPassword" type="password" autocomplete="current-password" placeholder="Your password" required>
+            </div>
+            <button class="primary-btn" id="loginBtn" type="submit">Sign in to MindSync</button>
+          </form>
 
-    <div class="library-card">
-      <p class="card-label">LIBRARY CARD</p>
-      <p class="card-name" id="sbName">—</p>
-      <p class="card-meta" id="sbMeta">—</p>
-    </div>
+          <form id="registerForm" onsubmit="return handleRegister(event)" style="display:none">
+            <div class="field">
+              <label for="regStudentId">Student ID</label>
+              <input id="regStudentId" autocomplete="username" placeholder="e.g. STU001" required>
+            </div>
+            <div class="field">
+              <label for="regName">Full name</label>
+              <input id="regName" autocomplete="name" placeholder="Your full name" required>
+            </div>
+            <div class="field">
+              <label for="regDepartment">Department</label>
+              <input id="regDepartment" placeholder="e.g. CSE" required>
+            </div>
+            <div class="field">
+              <label for="regPassword">Password</label>
+              <input id="regPassword" type="password" minlength="6" autocomplete="new-password" placeholder="At least 6 characters" required>
+            </div>
+            <button class="primary-btn" id="registerBtn" type="submit">Create Library Account</button>
+          </form>
 
-    <div class="library-card">
-      <div class="stat-row"><span class="stat-label">Books borrowed</span><span class="stat-value" id="statBorrowed">—</span></div>
-      <div class="stat-row"><span class="stat-label">Due soon</span><span class="stat-value" id="statDueSoon">—</span></div>
-      <div class="stat-row"><span class="stat-label">Reservations</span><span class="stat-value" id="statReservations">—</span></div>
-      <div class="stat-row"><span class="stat-label">Outstanding fine</span><span class="stat-value" id="statFine">—</span></div>
-    </div>
-
-    <div class="sidebar-actions">
-      <button class="sidebar-btn" onclick="refreshDashboard()">Refresh account status</button>
-      <button class="sidebar-btn" onclick="logout()">Sign out</button>
-    </div>
-  </aside>
-
-  <main id="chatArea" class="glass">
-    <div id="chatHeader">
-      <div class="avatar-book state-idle" id="avatarBook">
-        <div class="avatar-glow"></div>
-        <svg viewBox="0 0 40 40" fill="none">
-          <g class="page-left"><path d="M20 10 C14 7, 9 7, 6 9 V30 C9 28, 14 28, 20 31 Z" fill="rgba(255,255,255,0.06)" stroke="url(#g3)" stroke-width="1.3"/></g>
-          <g class="page-right"><path d="M20 10 C26 7, 31 7, 34 9 V30 C31 28, 26 28, 20 31 Z" fill="rgba(255,255,255,0.06)" stroke="url(#g3)" stroke-width="1.3"/></g>
-          <defs><linearGradient id="g3" x1="6" y1="7" x2="34" y2="31"><stop stop-color="#F0C878"/><stop offset="1" stop-color="#55C4A8"/></linearGradient></defs>
-        </svg>
-      </div>
-      <div>
-        <h1>Ask about anything in the catalog</h1>
-        <p class="subtitle">Search, availability, issue, renew, reserve — all in one conversation.</p>
+          <div class="auth-message" id="authMessage"></div>
+          <div class="auth-note" id="authNote">Student authentication is handled securely by the MindSync FastAPI backend. No third-party login is required.</div>
+        </div>
       </div>
     </div>
+  </section>
 
-    <div id="messages">
-      <div class="empty-state" id="emptyState">
-        <h2>Start a conversation</h2>
-        <p>Try: "Find ML books for CS501", "Best available NLP book for tomorrow's exam", or "CS603 er jonno NLP-r boi chai".</p>
+  <!-- ==================== APP ==================== -->
+  <section id="appScreen">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-mark"><span>MS</span></div>
+        <div>
+          MindSync
+          <div class="brand-meta">Smart Library Assistant</div>
+        </div>
       </div>
-    </div>
 
-    <div id="inputBar">
-      <input id="messageInput" placeholder="Ask LibroMind…" autocomplete="off" onkeydown="if(event.key==='Enter'){event.preventDefault();sendMessage();}">
-      <button class="btn-magnetic" id="sendBtn" onclick="sendMessage()">Send</button>
-    </div>
-  </main>
-</div>
+      <div class="side-label">Library</div>
+      <nav class="nav">
+        <button class="nav-btn active" type="button" onclick="focusComposer()">⌕ Find a Book</button>
+        <button class="nav-btn" type="button" onclick="useSuggestion('What books do I currently have borrowed?')">▣ My Borrowed Books</button>
+        <button class="nav-btn" type="button" onclick="useSuggestion('Show my reservations')">▱ My Reservations</button>
+        <button class="nav-btn" type="button" onclick="useSuggestion('Find an available book for me')">◉ Check Availability</button>
+      </nav>
 
-<script>
-// ============================================================
-// AMBIENT: particles
-// ============================================================
-(function spawnParticles() {
-  const field = document.getElementById('particleField');
-  const count = window.innerWidth < 780 ? 10 : 22;
-  for (let i = 0; i < count; i++) {
-    const p = document.createElement('div');
-    p.className = 'particle';
-    p.style.left = Math.random() * 100 + 'vw';
-    p.style.bottom = '-10px';
-    p.style.animationDuration = (14 + Math.random() * 14) + 's';
-    p.style.animationDelay = (Math.random() * 20) + 's';
-    field.appendChild(p);
-  }
-})();
+      <div class="library-mini">
+        <div class="small">Student account</div>
+        <div class="name" id="sbName">—</div>
+        <div class="id" id="sbMeta">—</div>
+      </div>
 
-// ============================================================
-// 3D TILT on the auth card, following the cursor
-// ============================================================
-(function tiltCard() {
-  const wrap = document.querySelector('.auth-card-wrap');
-  const card = document.getElementById('authCard');
-  if (!wrap || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-  wrap.addEventListener('mousemove', (e) => {
-    const rect = card.getBoundingClientRect();
-    const x = (e.clientX - rect.left) / rect.width - 0.5;
-    const y = (e.clientY - rect.top) / rect.height - 0.5;
-    card.style.transform = `rotateY(${x * 8}deg) rotateX(${-y * 8}deg) translateZ(0)`;
-  });
-  wrap.addEventListener('mouseleave', () => { card.style.transform = 'rotateY(0) rotateX(0)'; });
-})();
+      <div class="side-bottom">
+        <button class="side-btn" type="button" onclick="refreshDashboard()">↻ Refresh library status</button>
+        <button class="side-btn" type="button" onclick="logout()">Sign out</button>
+      </div>
+    </aside>
 
-// ============================================================
-// MAGNETIC BUTTONS
-// ============================================================
-(function magneticButtons() {
-  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-  document.addEventListener('mousemove', (e) => {
-    document.querySelectorAll('.btn-magnetic').forEach((btn) => {
-      const r = btn.getBoundingClientRect();
-      const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
-      const dx = e.clientX - cx, dy = e.clientY - cy;
-      const dist = Math.hypot(dx, dy);
-      const radius = 70;
-      if (dist < radius) {
-        const pull = (1 - dist / radius) * 0.35;
-        btn.style.transform = `translate(${dx * pull}px, ${dy * pull}px)`;
-      } else {
-        btn.style.transform = '';
-      }
-    });
-  });
-})();
+    <main class="main">
+      <header class="topbar">
+        <div class="top-title">MINDSYNC <span>/ SMART LIBRARY ASSISTANT</span></div>
+        <div class="status"><span class="status-dot"></span> Library session active</div>
+      </header>
 
-// ============================================================
-// AUTH: tab morph, password toggle, login/register
-// ============================================================
-function switchTab(which) {
-  document.getElementById('tabLogin').classList.toggle('active', which === 'login');
-  document.getElementById('tabRegister').classList.toggle('active', which === 'register');
-  document.getElementById('tabGlider').style.transform = which === 'register' ? 'translateX(100%)' : 'translateX(0)';
+      <div class="workspace">
+        <section class="welcome">
+          <div class="kicker">SMART LIBRARY · HITK</div>
+          <h2>What are you looking<br>for in the <span style="color:var(--red-2)">library?</span></h2>
+          <p>Search the catalog, discover relevant resources, check live availability, and manage your books with MindSync.</p>
+        </section>
 
-  const loginForm = document.getElementById('loginForm');
-  const registerForm = document.getElementById('registerForm');
-  if (which === 'register') {
-    loginForm.classList.add('hide-left');
-    setTimeout(() => { loginForm.style.display = 'none'; registerForm.style.display = 'block';
-      requestAnimationFrame(() => registerForm.classList.remove('hide-right')); }, 260);
-  } else {
-    registerForm.classList.add('hide-right');
-    setTimeout(() => { registerForm.style.display = 'none'; loginForm.style.display = 'block';
-      requestAnimationFrame(() => loginForm.classList.remove('hide-left')); }, 260);
-  }
-  hideAuthMessage();
-}
+        <section class="dashboard-strip">
+          <div class="stat"><div class="label">Books borrowed</div><div class="value" id="statBorrowed">—</div></div>
+          <div class="stat"><div class="label">Due soon</div><div class="value" id="statDueSoon">—</div></div>
+          <div class="stat"><div class="label">Reservations</div><div class="value" id="statReservations">—</div></div>
+          <div class="stat" id="fineStat"><div class="label">Outstanding fine</div><div class="value" id="statFine">—</div></div>
+        </section>
 
-function togglePw(id, btn) {
-  const input = document.getElementById(id);
-  input.type = input.type === 'password' ? 'text' : 'password';
-  btn.classList.add('toggled');
-  setTimeout(() => btn.classList.remove('toggled'), 220);
-}
+        <section class="library-actions">
+          <div class="section-heading">
+            <span>LIBRARY QUICK ACTIONS</span>
+            <small>Ask MindSync in plain language</small>
+          </div>
+          <div class="action-grid">
+            <button class="action-card" type="button" onclick="useSuggestion('Find me books about machine learning')"><strong>Find a Book</strong><span>Search the catalog semantically</span></button>
+            <button class="action-card" type="button" onclick="useSuggestion('Find the best available book for NLP')"><strong>Find Available</strong><span>Discover a book you can borrow now</span></button>
+            <button class="action-card" type="button" onclick="useSuggestion('What books do I currently have borrowed?')"><strong>My Books</strong><span>Check borrowed books and due dates</span></button>
+            <button class="action-card" type="button" onclick="useSuggestion('Show my reservations')"><strong>Reservations</strong><span>Check your active reservations</span></button>
+          </div>
+        </section>
 
-function showAuthMessage(text, kind) {
-  const el = document.getElementById('authMessage');
-  el.textContent = text;
-  el.className = 'auth-message show ' + kind;
-}
-function hideAuthMessage() { document.getElementById('authMessage').className = 'auth-message'; }
+        <section id="messages">
+          <div class="empty" id="emptyState">
+            <div class="empty-mark">MS</div>
+            <h3>Ask your library assistant.</h3>
+            <p>
+              MindSync can search books by meaning, check live availability, recommend resources,
+              and help you issue, renew, return, or reserve books using your authenticated account.
+            </p>
+            <div class="suggestions">
+              <button class="suggestion" type="button" onclick="useSuggestion('Find me books for machine learning')">Machine Learning</button>
+              <button class="suggestion" type="button" onclick="useSuggestion('Recommend books for DBMS')">DBMS resources</button>
+              <button class="suggestion" type="button" onclick="useSuggestion('What books do I currently have borrowed?')">My borrowed books</button>
+              <button class="suggestion" type="button" onclick="useSuggestion('Find the best available book for NLP')">Available NLP book</button>
+            </div>
+          </div>
+        </section>
 
-function showSuccessThenEnter(text) {
-  document.getElementById('loginForm').style.display = 'none';
-  document.getElementById('registerForm').style.display = 'none';
-  document.querySelector('.auth-tabs').style.display = 'none';
-  const success = document.getElementById('authSuccess');
-  document.getElementById('successText').textContent = text;
-  success.classList.add('show');
-  setTimeout(enterApp, 850);
-}
+        <section id="chatResults" class="chat-results"></section>
 
-async function handleLogin(event) {
-  event.preventDefault();
-  const btn = document.getElementById('loginSubmitBtn');
-  btn.disabled = true;
-  hideAuthMessage();
-  try {
-    const res = await fetch('/auth/login', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        student_id: document.getElementById('loginStudentId').value.trim(),
-        password: document.getElementById('loginPassword').value,
-      }),
-    });
-    const data = await res.json();
-    if (data.success) {
-      token = data.access_token; studentId = data.student_id; studentName = data.name;
-      localStorage.setItem('libromind_token', token);
-      localStorage.setItem('libromind_student_id', studentId);
-      localStorage.setItem('libromind_student_name', studentName || studentId);
-      showSuccessThenEnter('Welcome back, ' + (studentName || studentId) + '.');
-    } else {
-      showAuthMessage(data.message || 'Sign in failed.', 'error');
-    }
-  } catch (err) {
-    showAuthMessage('Could not reach the server. Is the API running?', 'error');
-  } finally { btn.disabled = false; }
-}
+        <section class="composer">
+          <div class="composer-box">
+            <input id="messageInput" placeholder="Search books or ask about your library account…" autocomplete="off">
+            <button id="sendBtn" type="button" onclick="sendMessage()">Search</button>
+          </div>
+          <div class="footer-note">MindSync · Smart Library Assistant · Search, discover, borrow, renew and reserve.</div>
+        </section>
+      </div>
+    </main>
+  </section>
 
-async function handleRegister(event) {
-  event.preventDefault();
-  const btn = document.getElementById('registerSubmitBtn');
-  btn.disabled = true;
-  hideAuthMessage();
-  try {
-    const res = await fetch('/auth/register', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        student_id: document.getElementById('regStudentId').value.trim(),
-        name: document.getElementById('regName').value.trim(),
-        department: document.getElementById('regDept').value.trim(),
-        password: document.getElementById('regPassword').value,
-      }),
-    });
-    const data = await res.json();
-    if (data.success) {
-      showAuthMessage('Account created — you can sign in now.', 'success');
-      document.getElementById('loginStudentId').value = document.getElementById('regStudentId').value;
-      switchTab('login');
-    } else {
-      showAuthMessage(data.message || 'Registration failed.', 'error');
-    }
-  } catch (err) {
-    showAuthMessage('Could not reach the server. Is the API running?', 'error');
-  } finally { btn.disabled = false; }
-}
-
-function logout() {
-  localStorage.removeItem('libromind_token');
-  localStorage.removeItem('libromind_student_id');
-  localStorage.removeItem('libromind_student_name');
-  token = null; studentId = null; studentName = null; chatHistory = [];
-  document.getElementById('messages').innerHTML = '';
-  document.getElementById('appScreen').classList.remove('show');
-  document.getElementById('authScreen').style.display = 'flex';
-  document.getElementById('authSuccess').classList.remove('show');
-  document.querySelector('.auth-tabs').style.display = 'flex';
-  document.getElementById('loginForm').style.display = 'block';
-  document.getElementById('loginForm').classList.remove('hide-left');
-}
-
-function enterApp() {
-  document.getElementById('authScreen').style.display = 'none';
-  document.getElementById('appScreen').classList.add('show');
-  document.getElementById('sbName').textContent = studentName || studentId;
-  document.getElementById('sbMeta').textContent = 'ID: ' + studentId;
-  refreshDashboard();
-}
-
-// ============================================================
-// STATE
-// ============================================================
-let token = localStorage.getItem('libromind_token');
-let studentId = localStorage.getItem('libromind_student_id');
-let studentName = localStorage.getItem('libromind_student_name');
-let chatHistory = [];
-
-// ============================================================
-// DASHBOARD
-// ============================================================
-async function refreshDashboard() {
-  if (!token) return;
-  try {
-    const res = await fetch('/students/' + encodeURIComponent(studentId) + '/dashboard', {
-      headers: { 'Authorization': 'Bearer ' + token },
-    });
-    if (res.status === 401) { logout(); return; }
-    const data = await res.json();
-    document.getElementById('statBorrowed').textContent = data.books_borrowed ?? '—';
-    document.getElementById('statReservations').textContent = data.active_reservations ?? '—';
-    const dueSoonEl = document.getElementById('statDueSoon');
-    dueSoonEl.textContent = data.due_soon ?? '—';
-    dueSoonEl.className = 'stat-value' + (data.due_soon > 0 ? ' warn' : '');
-    const fineEl = document.getElementById('statFine');
-    fineEl.textContent = '\u20b9' + (data.outstanding_fine ?? 0);
-    fineEl.className = 'stat-value' + (data.outstanding_fine > 0 ? ' warn' : '');
-  } catch (err) { console.error('Dashboard refresh failed', err); }
-}
-
-// ============================================================
-// AVATAR STATE
-// ============================================================
-function setAvatarState(state) {
-  const avatar = document.getElementById('avatarBook');
-  avatar.className = 'avatar-book state-' + state;
-}
-
-// ============================================================
-// Extract book results from a tool_calls trail so they can be
-// rendered as tactile cards instead of buried in plain text.
-// ============================================================
-function extractBookCards(toolCalls) {
-  if (!toolCalls) return [];
-  const cards = [];
-  toolCalls.forEach((tc) => {
-    const r = tc.result;
-    if (!r) return;
-    if (tc.tool === 'search_catalog' && Array.isArray(r.results)) {
-      r.results.forEach((hit) => cards.push({
-        title: hit.metadata?.title || hit.book_id, author: hit.metadata?.author || '',
-        subject: hit.metadata?.subject || '', available: null,
-      }));
-    } else if (tc.tool === 'find_best_available_book' && r.found) {
-      cards.push({ title: r.title, author: '', subject: r.shelf_location || '', available: r.available_now });
-    } else if (tc.tool === 'recommend_for_course' && Array.isArray(r.recommendations)) {
-      r.recommendations.forEach((b) => cards.push({
-        title: b.title, author: '', subject: b.shelf_location || '',
-        available: b.available_copies > 0,
-      }));
-    } else if (tc.tool === 'check_availability' && r.title) {
-      cards.push({ title: r.title, author: '', subject: r.shelf_location || '', available: r.available_copies > 0 });
-    }
-  });
-  // de-dupe by title, but keep the MOST COMPLETE version — a later
-  // check_availability/find_best_available_book result has real
-  // availability + shelf location, which should win over an earlier
-  // bare search_catalog hit for the same book rather than being dropped.
-  const byTitle = new Map();
-  cards.forEach((c) => {
-    const existing = byTitle.get(c.title);
-    if (!existing) { byTitle.set(c.title, c); return; }
-    byTitle.set(c.title, {
-      title: c.title,
-      author: c.author || existing.author,
-      subject: c.subject || existing.subject,
-      available: c.available !== null ? c.available : existing.available,
-    });
-  });
-  return Array.from(byTitle.values()).slice(0, 4);
-}
-
-function renderBookCards(cards) {
-  if (cards.length === 0) return null;
-  const wrap = document.createElement('div');
-  wrap.className = 'book-cards';
-  cards.forEach((c, i) => {
-    const card = document.createElement('div');
-    card.className = 'book-card';
-    card.style.animationDelay = (i * 80) + 'ms';
-    let availHtml = '';
-    if (c.available === true) availHtml = '<span class="b-avail yes">Available</span>';
-    else if (c.available === false) availHtml = '<span class="b-avail no">Checked out</span>';
-    card.innerHTML = `<div class="spine"></div><p class="b-title">${escapeHtml(c.title)}</p><p class="b-meta">${escapeHtml(c.subject)}</p>${availHtml}`;
-    card.addEventListener('mousemove', (e) => {
-      const r = card.getBoundingClientRect();
-      const x = (e.clientX - r.left) / r.width - 0.5, y = (e.clientY - r.top) / r.height - 0.5;
-      card.style.transform = `rotateY(${x * 14}deg) rotateX(${-y * 14}deg) translateY(-2px)`;
-    });
-    card.addEventListener('mouseleave', () => { card.style.transform = ''; });
-    wrap.appendChild(card);
-  });
-  return wrap;
-}
-
-function escapeHtml(str) {
-  const d = document.createElement('div'); d.textContent = str ?? ''; return d.innerHTML;
-}
-
-// ============================================================
-// CHAT
-// ============================================================
-function appendMessage(role, text, toolCalls) {
-  document.getElementById('emptyState')?.remove();
-  const messages = document.getElementById('messages');
-
-  const row = document.createElement('div');
-  row.className = 'msg-row ' + role;
-  const bubble = document.createElement('div');
-  bubble.className = 'bubble';
-  bubble.textContent = text;
-  row.appendChild(bubble);
-  messages.appendChild(row);
-
-  if (role === 'assistant') {
-    const cards = extractBookCards(toolCalls);
-    const cardRow = renderBookCards(cards);
-    if (cardRow) messages.appendChild(cardRow);
-
-    if (toolCalls && toolCalls.length > 0) {
-      const trace = document.createElement('details');
-      trace.className = 'trace';
-      const summary = document.createElement('summary');
-      summary.textContent = 'Reasoning trail — ' + toolCalls.length + ' tool call' + (toolCalls.length > 1 ? 's' : '');
-      trace.appendChild(summary);
-      toolCalls.forEach((tc) => {
-        const div = document.createElement('div');
-        div.className = 'call';
-        div.textContent = tc.tool + '(' + JSON.stringify(tc.input) + ')';
-        trace.appendChild(div);
-      });
-      messages.appendChild(trace);
-    }
-  }
-
-  messages.scrollTop = messages.scrollHeight;
-}
-
-async function sendMessage() {
-  const input = document.getElementById('messageInput');
-  const text = input.value.trim();
-  if (!text) return;
-  input.value = '';
-  document.getElementById('sendBtn').disabled = true;
-
-  appendMessage('user', text);
-  setAvatarState('thinking');
-
-  try {
-    const res = await fetch('/chat', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-      body: JSON.stringify({ message: text, history: chatHistory }),
-    });
-    if (res.status === 401) { logout(); return; }
-    const data = await res.json();
-    chatHistory = data.history || [];
-    setAvatarState('responding');
-    appendMessage('assistant', data.reply || '(no reply)', data.tool_calls);
-    refreshDashboard();
-  } catch (err) {
-    appendMessage('assistant', 'Something went wrong reaching the assistant. Please try again.');
-  } finally {
-    setTimeout(() => setAvatarState('idle'), 900);
-    document.getElementById('sendBtn').disabled = false;
-    input.focus();
-  }
-}
-
-// ============================================================
-// BOOTSTRAP
-// ============================================================
-if (token && studentId) { enterApp(); }
-</script>
+  <script src="/static/app.js"></script>
 </body>
 </html>

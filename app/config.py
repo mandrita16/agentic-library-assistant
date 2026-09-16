@@ -1,17 +1,17 @@
 """
-config.py
----------
-Single source of truth for all MindSync settings
-and library policy constants.
-
-Keeping policy numbers such as fine rate, loan period,
-and maximum renewals here means changing them for a
-real deployment never requires modifying service logic.
+app/config.py
+-------------
+Single source of truth for MindSync application settings,
+AI configuration, database configuration, authentication,
+RAG configuration, and library policy constants.
 """
 
 import os
+
 from dotenv import load_dotenv
 
+
+# Load environment variables from .env
 load_dotenv()
 
 
@@ -19,7 +19,10 @@ load_dotenv()
 # Application
 # ============================================================
 
-APP_NAME = "MindSync"
+APP_NAME = os.getenv(
+    "APP_NAME",
+    "MindSync"
+)
 
 
 # ============================================================
@@ -38,17 +41,49 @@ MONGO_DB_NAME = os.getenv(
 
 
 # ============================================================
-# Anthropic / Claude Configuration
+# JWT Authentication Configuration
 # ============================================================
 
-ANTHROPIC_API_KEY = os.getenv(
-    "ANTHROPIC_API_KEY",
+JWT_SECRET_KEY = os.getenv(
+    "JWT_SECRET_KEY",
+    "change-this-secret-key"
+)
+
+JWT_ALGORITHM = os.getenv(
+    "JWT_ALGORITHM",
+    "HS256"
+)
+
+JWT_EXPIRE_MINUTES = int(
+    os.getenv(
+        "JWT_EXPIRE_MINUTES",
+        "60"
+    )
+)
+
+
+# ============================================================
+# Admin Authentication Configuration
+# ============================================================
+
+ADMIN_SETUP_KEY = os.getenv(
+    "ADMIN_SETUP_KEY",
     ""
 )
 
-CLAUDE_MODEL = os.getenv(
-    "CLAUDE_MODEL",
-    "claude-sonnet-4-6"
+
+# ============================================================
+# Groq / LLM Configuration
+# ============================================================
+
+GROQ_API_KEY = os.getenv(
+    "GROQ_API_KEY",
+    ""
+)
+
+GROQ_MODEL = os.getenv(
+    "GROQ_MODEL",
+    "llama-3.3-70b-versatile"
 )
 
 
@@ -68,12 +103,14 @@ CHROMA_COLLECTION_NAME = os.getenv(
 
 
 # ============================================================
-# Embedding Model
+# Embedding Model Configuration
 # ============================================================
 
-# Local, free, no-API-key embedding model.
-# Produces 384-dimensional embeddings and is
-# relatively lightweight for local/CPU usage.
+# Local sentence-transformer model.
+# Does not require an API key.
+#
+# all-MiniLM-L6-v2 produces 384-dimensional embeddings
+# and is lightweight enough for local development.
 
 EMBEDDING_MODEL_NAME = os.getenv(
     "EMBEDDING_MODEL_NAME",
@@ -86,13 +123,22 @@ EMBEDDING_MODEL_NAME = os.getenv(
 # ============================================================
 
 LOAN_PERIOD_DAYS = int(
-    os.getenv("LOAN_PERIOD_DAYS", "14")
+    os.getenv(
+        "LOAN_PERIOD_DAYS",
+        "14"
+    )
 )
 
 MAX_RENEWALS = int(
-    os.getenv("MAX_RENEWALS", "2")
+    os.getenv(
+        "MAX_RENEWALS",
+        "2"
+    )
 )
 
 FINE_PER_DAY = float(
-    os.getenv("FINE_PER_DAY", "5")
+    os.getenv(
+        "FINE_PER_DAY",
+        "5"
+    )
 )

@@ -4,12 +4,9 @@ uvicorn[standard]
 pymongo
 python-dotenv
 
-anthropic
-
 langchain
 langchain-core
-langchain-community
-langchain-anthropic
+langchain-groq
 langgraph
 
 chromadb

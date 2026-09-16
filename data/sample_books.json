@@ -6,11 +6,11 @@
     "isbn": "9780262043793",
     "subject": "Machine Learning",
     "course_codes": ["CS501", "CS601"],
-    "description": "Covers supervised and unsupervised learning, decision trees, neural networks, and evaluation metrics. Suitable for undergraduate-level ML courses.",
+    "description": "Covers supervised and unsupervised learning, decision trees, neural networks, model evaluation, and practical machine learning concepts. Suitable for undergraduate-level ML courses.",
     "shelf_location": "Rack 4, Row 2 - AI/ML Section",
     "total_copies": 3,
     "available_copies": 1,
-    "tags": ["machine learning", "supervised learning", "beginner"]
+    "tags": ["machine learning", "supervised learning", "unsupervised learning", "beginner"]
   },
   {
     "book_id": "B002",
@@ -19,37 +19,37 @@
     "isbn": "9780262035613",
     "subject": "Deep Learning",
     "course_codes": ["CS602"],
-    "description": "Comprehensive reference on deep neural networks, backpropagation, CNNs, RNNs, and generative models. Graduate-level depth.",
+    "description": "Comprehensive reference on deep neural networks, backpropagation, convolutional neural networks, recurrent neural networks, optimization, and generative models. Graduate-level depth.",
     "shelf_location": "Rack 4, Row 3 - AI/ML Section",
     "total_copies": 2,
     "available_copies": 0,
-    "tags": ["deep learning", "neural networks", "advanced"]
+    "tags": ["deep learning", "neural networks", "cnn", "rnn", "advanced"]
   },
   {
     "book_id": "B003",
     "title": "Database System Concepts",
-    "author": "Abraham Silberschatz",
+    "author": "Abraham Silberschatz, Henry F. Korth, S. Sudarshan",
     "isbn": "9780078022159",
     "subject": "Database Systems",
     "course_codes": ["CS301"],
-    "description": "Standard textbook on relational databases, SQL, normalization, transactions, and indexing.",
+    "description": "Standard textbook covering relational databases, SQL, normalization, transactions, indexing, query processing, database design, and transaction management.",
     "shelf_location": "Rack 2, Row 1 - Core CS Section",
     "total_copies": 5,
     "available_copies": 4,
-    "tags": ["dbms", "sql", "core cs"]
+    "tags": ["dbms", "sql", "database", "normalization", "transactions", "core cs"]
   },
   {
     "book_id": "B004",
     "title": "Operating System Concepts",
-    "author": "Abraham Silberschatz",
+    "author": "Abraham Silberschatz, Peter Baer Galvin, Greg Gagne",
     "isbn": "9781118063330",
     "subject": "Operating Systems",
     "course_codes": ["CS302"],
-    "description": "Covers process management, memory management, file systems, and concurrency.",
+    "description": "Covers process management, CPU scheduling, threads, synchronization, memory management, virtual memory, file systems, and concurrency.",
     "shelf_location": "Rack 2, Row 2 - Core CS Section",
     "total_copies": 4,
     "available_copies": 2,
-    "tags": ["operating systems", "core cs"]
+    "tags": ["operating systems", "process management", "memory management", "scheduling", "core cs"]
   },
   {
     "book_id": "B005",
@@ -58,11 +58,11 @@
     "isbn": "9780131873216",
     "subject": "Natural Language Processing",
     "course_codes": ["CS603"],
-    "description": "Foundational NLP text covering tokenization, parsing, language models, and modern transformer-based approaches.",
+    "description": "Foundational NLP text covering tokenization, parsing, language models, information extraction, machine translation, and modern transformer-based approaches.",
     "shelf_location": "Rack 4, Row 4 - AI/ML Section",
     "total_copies": 2,
     "available_copies": 2,
-    "tags": ["nlp", "transformers", "language models"]
+    "tags": ["nlp", "natural language processing", "transformers", "language models"]
   },
   {
     "book_id": "B006",
@@ -71,24 +71,24 @@
     "isbn": "9780134610993",
     "subject": "Artificial Intelligence",
     "course_codes": ["CS501"],
-    "description": "The canonical AI textbook covering search, logic, planning, and probabilistic reasoning alongside modern ML.",
+    "description": "Comprehensive AI textbook covering intelligent agents, search algorithms, game playing, logic, planning, uncertainty, probabilistic reasoning, machine learning, and modern AI systems.",
     "shelf_location": "Rack 4, Row 1 - AI/ML Section",
     "total_copies": 4,
     "available_copies": 3,
-    "tags": ["artificial intelligence", "search algorithms", "core ai"]
+    "tags": ["artificial intelligence", "ai", "search algorithms", "agents", "core ai"]
   },
   {
     "book_id": "B007",
     "title": "Computer Networks",
-    "author": "Andrew S. Tanenbaum",
+    "author": "Andrew S. Tanenbaum, David J. Wetherall",
     "isbn": "9780132126953",
     "subject": "Computer Networks",
     "course_codes": ["CS401"],
-    "description": "Layered network architecture, TCP/IP, routing protocols, and network security fundamentals.",
+    "description": "Covers layered network architecture, TCP/IP, Ethernet, routing protocols, transport protocols, wireless networks, network applications, and security fundamentals.",
     "shelf_location": "Rack 3, Row 1 - Core CS Section",
     "total_copies": 3,
     "available_copies": 1,
-    "tags": ["networking", "tcp/ip", "core cs"]
+    "tags": ["networking", "computer networks", "tcp/ip", "routing", "core cs"]
   },
   {
     "book_id": "B008",
@@ -97,10 +97,166 @@
     "isbn": "9789389645123",
     "subject": "Fintech",
     "course_codes": ["MG701"],
-    "description": "Overview of digital lending, payments infrastructure, and regulatory frameworks in the Indian fintech ecosystem.",
+    "description": "Overview of digital lending, payments infrastructure, financial technology platforms, and regulatory frameworks in the Indian fintech ecosystem.",
     "shelf_location": "Rack 6, Row 1 - Management Section",
     "total_copies": 2,
     "available_copies": 2,
-    "tags": ["fintech", "lending", "finance"]
+    "tags": ["fintech", "lending", "payments", "finance", "india"]
+  },
+  {
+    "book_id": "B009",
+    "title": "Introduction to Algorithms",
+    "author": "Thomas H. Cormen, Charles E. Leiserson, Ronald L. Rivest, Clifford Stein",
+    "isbn": "9780262046305",
+    "subject": "Data Structures and Algorithms",
+    "course_codes": ["CS201", "CS401"],
+    "description": "Comprehensive algorithms reference covering sorting, searching, graphs, greedy algorithms, dynamic programming, data structures, and algorithm analysis.",
+    "shelf_location": "Rack 1, Row 1 - DSA Section",
+    "total_copies": 4,
+    "available_copies": 3,
+    "tags": ["dsa", "algorithms", "data structures", "dynamic programming", "graphs"]
+  },
+  {
+    "book_id": "B010",
+    "title": "Computer Vision: Algorithms and Applications",
+    "author": "Richard Szeliski",
+    "isbn": "9783030343729",
+    "subject": "Computer Vision",
+    "course_codes": ["CS604"],
+    "description": "Covers image processing, feature detection, image matching, stereo vision, object recognition, 3D reconstruction, and modern computer vision applications.",
+    "shelf_location": "Rack 5, Row 1 - Computer Vision Section",
+    "total_copies": 2,
+    "available_copies": 1,
+    "tags": ["computer vision", "image processing", "stereo vision", "3d", "object detection"]
+  },
+  {
+    "book_id": "B011",
+    "title": "Python Crash Course",
+    "author": "Eric Matthes",
+    "isbn": "9781593279288",
+    "subject": "Python Programming",
+    "course_codes": ["CS101", "CS202"],
+    "description": "Practical introduction to Python programming covering variables, functions, classes, files, testing, data structures, and project-based programming.",
+    "shelf_location": "Rack 1, Row 4 - Programming Section",
+    "total_copies": 4,
+    "available_copies": 4,
+    "tags": ["python", "programming", "beginner", "coding"]
+  },
+  {
+    "book_id": "B012",
+    "title": "Data Science from Scratch",
+    "author": "Joel Grus",
+    "isbn": "9781492041139",
+    "subject": "Data Science",
+    "course_codes": ["CS605"],
+    "description": "Introduces data science concepts from first principles, including Python, statistics, probability, data visualization, machine learning, and practical data analysis.",
+    "shelf_location": "Rack 5, Row 2 - Data Science Section",
+    "total_copies": 3,
+    "available_copies": 2,
+    "tags": ["data science", "python", "statistics", "machine learning", "analytics"]
+  },
+  {
+    "book_id": "B013",
+    "title": "Hands-On Data Analysis with Pandas",
+    "author": "Stefanie Molin",
+    "isbn": "9781800563453",
+    "subject": "Data Analysis",
+    "course_codes": ["CS605", "CS606"],
+    "description": "Practical guide to data analysis using Python and pandas, covering data cleaning, manipulation, visualization, exploratory analysis, and working with real datasets.",
+    "shelf_location": "Rack 5, Row 3 - Data Science Section",
+    "total_copies": 2,
+    "available_copies": 1,
+    "tags": ["data analysis", "pandas", "python", "data cleaning", "visualization"]
+  },
+  {
+    "book_id": "B014",
+    "title": "Clean Code",
+    "author": "Robert C. Martin",
+    "isbn": "9780132350884",
+    "subject": "Software Engineering",
+    "course_codes": ["CS402"],
+    "description": "Practical principles for writing readable, maintainable, testable software with emphasis on clean functions, classes, naming, refactoring, and software craftsmanship.",
+    "shelf_location": "Rack 3, Row 3 - Software Engineering Section",
+    "total_copies": 3,
+    "available_copies": 3,
+    "tags": ["clean code", "software engineering", "programming", "refactoring"]
+  },
+  {
+    "book_id": "B015",
+    "title": "Computer Organization and Design",
+    "author": "David A. Patterson, John L. Hennessy",
+    "isbn": "9780128203316",
+    "subject": "Computer Architecture",
+    "course_codes": ["CS303"],
+    "description": "Introduces computer organization, processor design, instruction sets, memory hierarchy, performance, pipelining, and hardware-software interaction.",
+    "shelf_location": "Rack 3, Row 4 - Architecture Section",
+    "total_copies": 3,
+    "available_copies": 3,
+    "tags": ["computer architecture", "processor", "memory", "hardware", "pipelining"]
+  },
+  {
+    "book_id": "B016",
+    "title": "Computer Security: Principles and Practice",
+    "author": "William Stallings, Lawrie Brown",
+    "isbn": "9780134794105",
+    "subject": "Cybersecurity",
+    "course_codes": ["CS607"],
+    "description": "Covers security principles, cryptography, authentication, network security, malware, access control, secure software, and practical cybersecurity concepts.",
+    "shelf_location": "Rack 7, Row 1 - Security Section",
+    "total_copies": 2,
+    "available_copies": 2,
+    "tags": ["cybersecurity", "security", "cryptography", "network security"]
+  },
+  {
+    "book_id": "B017",
+    "title": "Cloud Computing: Concepts, Technology and Architecture",
+    "author": "Thomas Erl, Zaigham Mahmood, Ricardo Puttini",
+    "isbn": "9780133387520",
+    "subject": "Cloud Computing",
+    "course_codes": ["CS608"],
+    "description": "Explains cloud computing fundamentals, virtualization, cloud services, infrastructure, deployment models, architecture, and distributed computing concepts.",
+    "shelf_location": "Rack 7, Row 2 - Cloud Computing Section",
+    "total_copies": 3,
+    "available_copies": 2,
+    "tags": ["cloud", "cloud computing", "virtualization", "distributed systems", "aws"]
+  },
+  {
+    "book_id": "B018",
+    "title": "Software Engineering",
+    "author": "Ian Sommerville",
+    "isbn": "9780133943030",
+    "subject": "Software Engineering",
+    "course_codes": ["CS402", "CS403"],
+    "description": "Covers software development processes, requirements engineering, architecture, design, testing, project management, agile development, and software evolution.",
+    "shelf_location": "Rack 3, Row 2 - Software Engineering Section",
+    "total_copies": 3,
+    "available_copies": 2,
+    "tags": ["software engineering", "agile", "testing", "requirements", "software development"]
+  },
+  {
+    "book_id": "B019",
+    "title": "Pattern Recognition and Machine Learning",
+    "author": "Christopher M. Bishop",
+    "isbn": "9780387310732",
+    "subject": "Machine Learning",
+    "course_codes": ["CS601", "CS602"],
+    "description": "Advanced treatment of probabilistic machine learning covering classification, regression, graphical models, neural networks, kernels, and approximate inference.",
+    "shelf_location": "Rack 4, Row 5 - AI/ML Section",
+    "total_copies": 2,
+    "available_copies": 1,
+    "tags": ["machine learning", "pattern recognition", "probability", "classification", "advanced"]
+  },
+  {
+    "book_id": "B020",
+    "title": "Designing Data-Intensive Applications",
+    "author": "Martin Kleppmann",
+    "isbn": "9781449373320",
+    "subject": "Data Systems",
+    "course_codes": ["CS609"],
+    "description": "Explores reliable, scalable, and maintainable data systems including databases, distributed systems, replication, partitioning, batch processing, stream processing, and system design.",
+    "shelf_location": "Rack 5, Row 4 - Data Systems Section",
+    "total_copies": 2,
+    "available_copies": 1,
+    "tags": ["data systems", "distributed systems", "databases", "system design", "scalability"]
   }
 ]

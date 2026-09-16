@@ -1,39 +1,131 @@
 """
-auth/dependencies.py
-----------------------
-FastAPI "Depends()" functions that every protected route uses instead of
-trusting a student_id/admin_id the client sends in the request body.
-The token is the only source of truth for who's making the request —
-this is what stops a student from issuing "issue_book" as someone else
-just by changing a field in the JSON body.
+app/auth/dependencies.py
+------------------------
+Authentication dependencies for protected API endpoints.
+
+JWT tokens are sent using:
+
+Authorization: Bearer <access_token>
 """
 
 from fastapi import Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordBearer
+from fastapi.security import (
+    HTTPAuthorizationCredentials,
+    HTTPBearer,
+)
+
 from app.auth.security import decode_access_token
 
-# tokenUrl is just what shows in the /docs "Authorize" button — the real
-# login endpoint is POST /auth/login (this doesn't have to match exactly
-# for a JSON-body login flow, but it's kept aligned for clarity).
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login", auto_error=False)
+
+# ============================================================
+# BEARER AUTHENTICATION
+# ============================================================
+
+bearer_scheme = HTTPBearer(
+    auto_error=False
+)
 
 
-def _require_role(token: str | None, expected_role: str) -> str:
-    if token is None:
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Not authenticated. Include an Authorization: Bearer <token> header.")
+# ============================================================
+# ROLE CHECKING
+# ============================================================
+
+def _require_role(
+    credentials: HTTPAuthorizationCredentials | None,
+    expected_role: str,
+) -> str:
+
+    # --------------------------------------------------------
+    # No token provided
+    # --------------------------------------------------------
+
+    if credentials is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authenticated. Please provide a Bearer token.",
+            headers={
+                "WWW-Authenticate": "Bearer"
+            },
+        )
+
+    # --------------------------------------------------------
+    # Extract JWT
+    # --------------------------------------------------------
+
+    token = credentials.credentials
+
+    # --------------------------------------------------------
+    # Decode JWT
+    # --------------------------------------------------------
+
     payload = decode_access_token(token)
+
     if payload is None:
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid or expired token. Please log in again.")
-    if payload.get("role") != expected_role:
-        raise HTTPException(status.HTTP_403_FORBIDDEN, f"This endpoint requires a {expected_role} account.")
-    return payload["sub"]
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired token. Please log in again.",
+            headers={
+                "WWW-Authenticate": "Bearer"
+            },
+        )
+
+    # --------------------------------------------------------
+    # Check role
+    # --------------------------------------------------------
+
+    role = payload.get("role")
+
+    if role != expected_role:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"This endpoint requires a {expected_role} account.",
+        )
+
+    # --------------------------------------------------------
+    # Get user identity
+    # --------------------------------------------------------
+
+    user_id = payload.get("sub")
+
+    if not user_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token: user identity is missing.",
+            headers={
+                "WWW-Authenticate": "Bearer"
+            },
+        )
+
+    return user_id
 
 
-def get_current_student(token: str = Depends(oauth2_scheme)) -> str:
-    """Returns the authenticated student_id, or raises 401/403. Use as: student_id: str = Depends(get_current_student)"""
-    return _require_role(token, "student")
+# ============================================================
+# STUDENT AUTHENTICATION
+# ============================================================
+
+def get_current_student(
+    credentials: HTTPAuthorizationCredentials | None = Depends(
+        bearer_scheme
+    ),
+) -> str:
+
+    return _require_role(
+        credentials,
+        "student",
+    )
 
 
-def get_current_admin(token: str = Depends(oauth2_scheme)) -> str:
-    """Returns the authenticated admin_id, or raises 401/403."""
-    return _require_role(token, "admin")
+# ============================================================
+# ADMIN AUTHENTICATION
+# ============================================================
+
+def get_current_admin(
+    credentials: HTTPAuthorizationCredentials | None = Depends(
+        bearer_scheme
+    ),
+) -> str:
+
+    return _require_role(
+        credentials,
+        "admin",
+    )

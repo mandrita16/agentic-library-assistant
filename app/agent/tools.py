@@ -1,106 +1,207 @@
 """
-agent/tools.py
---------------
-LangChain tools used by the MindSync agent.
+app/agent/tools.py
+------------------
 
-The tools connect the LangGraph/LLM layer to the existing
-library services, RAG pipeline and database operations.
+LangChain tools exposed to the MindSync LangGraph agent.
 
-The tools contain very little business logic.
-Actual business rules remain inside app.services.
+Architecture:
+
+    Groq / LangGraph
+            ↓
+        LangChain Tools
+            ↓
+    ┌───────┴────────┐
+    ↓                ↓
+book_service   recommendation_service
+    ↓                ↓
+MongoDB       ChromaDB + MongoDB
+
+Student-specific operations obtain student_id from the
+authenticated LangGraph runtime context.
+
+The LLM does NOT provide student_id.
 """
 
-from datetime import datetime, timedelta
-
 from langchain_core.tools import tool
+from langchain.tools import ToolRuntime
 
-from app.rag.vector_store import semantic_search
-from app.services.book_service import get_availability
 from app.services import (
+    book_service,
     circulation_service,
-    recommendation_service,
     student_service,
+    recommendation_service,
 )
 
 
-# ================================================================
-# LIBRARY DISCOVERY
-# ================================================================
+# ============================================================
+# CATALOG / SEARCH TOOLS
+# ============================================================
 
 
 @tool
-def search_catalog(query: str, top_k: int = 5) -> dict:
+def search_catalog(
+    query: str,
+    top_k: int = 5,
+) -> dict:
     """
-    Search the library catalog using semantic search.
+    Search the library catalog using semantic/vector search.
 
-    Use this for general questions such as finding books
-    about machine learning, operating systems, databases,
-    programming, etc.
+    Use this when the student wants to find books based on:
 
-    This tool does not provide live availability.
+    - topic
+    - subject
+    - title
+    - author
+    - concept
+    - general description
     """
-    return {
-        "results": semantic_search(
-            query,
-            top_k
+
+    try:
+        if not query or not query.strip():
+            return {
+                "success": False,
+                "error": "Search query is required.",
+            }
+
+        results = book_service.search_books(
+            query=query.strip(),
+            top_k=top_k,
         )
-    }
 
-
-@tool
-def check_availability(book_id: str) -> dict:
-    """
-    Check the current availability, copy count and shelf
-    location of a specific book.
-    """
-
-    result = get_availability(book_id)
-
-    if result is None:
         return {
-            "success": False,
-            "error": f"Book '{book_id}' not found."
+            "success": True,
+            "query": query,
+            "results": results,
         }
 
-    return result
+    except Exception as exc:
+        return {
+            "success": False,
+            "error": str(exc),
+        }
+
+
+@tool
+def check_availability(
+    book_id: str,
+) -> dict:
+    """
+    Check the current live availability of a specific book.
+
+    Availability comes from MongoDB, not semantic search.
+    """
+
+    try:
+        if not book_id or not book_id.strip():
+            return {
+                "success": False,
+                "error": "book_id is required.",
+            }
+
+        result = book_service.get_book_availability(
+            book_id.strip()
+        )
+
+        if result is None:
+            return {
+                "success": False,
+                "book_id": book_id,
+                "error": "Book not found.",
+            }
+
+        return {
+            "success": True,
+            "book_id": book_id,
+            "availability": result,
+        }
+
+    except Exception as exc:
+        return {
+            "success": False,
+            "book_id": book_id,
+            "error": str(exc),
+        }
+
+
+# ============================================================
+# RECOMMENDATION TOOLS
+# ============================================================
 
 
 @tool
 def find_best_available_book(
     query: str,
-    top_k: int = 5
+    top_k: int = 5,
 ) -> dict:
     """
     Find the most relevant book that is currently available.
 
-    Use this when a student wants the best available book
-    for a particular topic or learning requirement.
+    This is a multi-step operation:
+
+    1. Semantic retrieval from ChromaDB.
+    2. Live availability lookup from MongoDB.
+    3. Select the most relevant available candidate.
+    4. Fall back to the best matching unavailable book if
+       no candidate is currently available.
     """
 
-    return recommendation_service.find_best_available_book(
-        query,
-        top_k
-    )
+    try:
+        if not query or not query.strip():
+            return {
+                "success": False,
+                "error": "Search query is required.",
+            }
+
+        result = recommendation_service.find_best_available_book(
+            query=query.strip(),
+            top_k=top_k,
+        )
+
+        return result
+
+    except Exception as exc:
+        return {
+            "success": False,
+            "error": str(exc),
+        }
 
 
 @tool
 def recommend_for_course(
     course_code: str,
     weak_topic: str = "",
-    top_k: int = 3
+    top_k: int = 3,
 ) -> dict:
     """
-    Recommend books for a university course.
+    Recommend books for a particular course.
 
-    Optionally consider a topic that the student is
-    struggling with.
+    Optionally use weak_topic to focus recommendations
+    on an area the student finds difficult.
+
+    The recommendation service combines semantic retrieval
+    with live availability information.
     """
 
-    return recommendation_service.recommend_for_course(
-        course_code,
-        weak_topic or None,
-        top_k
-    )
+    try:
+        if not course_code or not course_code.strip():
+            return {
+                "success": False,
+                "error": "course_code is required.",
+            }
+
+        result = recommendation_service.recommend_for_course(
+            course_code=course_code.strip(),
+            weak_topic=weak_topic.strip() if weak_topic else "",
+            top_k=top_k,
+        )
+
+        return result
+
+    except Exception as exc:
+        return {
+            "success": False,
+            "error": str(exc),
+        }
 
 
 @tool
@@ -108,61 +209,38 @@ def recommend_for_goal(
     goal: str,
     current_skills: str = "",
     topics: str = "",
-    top_k: int = 5
+    top_k: int = 5,
 ) -> dict:
     """
-    Recommend library books based on a student's academic,
-    career, examination or learning goal.
+    Recommend books based on a student's learning or
+    career goal.
     """
 
-    query_parts = [goal]
+    try:
+        if not goal or not goal.strip():
+            return {
+                "success": False,
+                "error": "goal is required.",
+            }
 
-    if current_skills:
-        query_parts.append(current_skills)
-
-    if topics:
-        query_parts.append(topics)
-
-    query = " ".join(query_parts)
-
-    candidates = semantic_search(
-        query,
-        top_k=top_k
-    )
-
-    recommendations = []
-
-    for candidate in candidates:
-
-        book_id = candidate.get("book_id")
-
-        if not book_id:
-            continue
-
-        availability = get_availability(book_id)
-
-        if not availability:
-            continue
-
-        recommendations.append({
-            "book_id": book_id,
-            "title": availability.get("title"),
-            "available_copies": availability.get(
-                "available_copies",
-                0
+        result = recommendation_service.recommend_for_goal(
+            goal=goal.strip(),
+            current_skills=(
+                current_skills.strip()
+                if current_skills
+                else ""
             ),
-            "shelf_location": availability.get(
-                "shelf_location"
-            ),
-            "relevance": candidate.get("distance"),
-        })
+            topics=topics.strip() if topics else "",
+            top_k=top_k,
+        )
 
-    return {
-        "goal": goal,
-        "current_skills": current_skills,
-        "topics": topics,
-        "recommendations": recommendations,
-    }
+        return result
+
+    except Exception as exc:
+        return {
+            "success": False,
+            "error": str(exc),
+        }
 
 
 @tool
@@ -170,260 +248,369 @@ def recommend_by_mood(
     mood: str,
     intent: str = "",
     difficulty: str = "",
-    top_k: int = 5
+    top_k: int = 5,
 ) -> dict:
     """
-    Recommend books based on mood, reading intention
-    or difficulty preference.
-
-    This is a reading-preference feature and not a
-    medical or psychological diagnosis.
+    Recommend books based on the student's mood,
+    reading intent, and optionally desired difficulty.
     """
 
-    query_parts = [mood]
+    try:
+        if not mood or not mood.strip():
+            return {
+                "success": False,
+                "error": "mood is required.",
+            }
 
-    if intent:
-        query_parts.append(intent)
-
-    if difficulty:
-        query_parts.append(difficulty)
-
-    query = " ".join(query_parts)
-
-    candidates = semantic_search(
-        query,
-        top_k=top_k
-    )
-
-    recommendations = []
-
-    for candidate in candidates:
-
-        book_id = candidate.get("book_id")
-
-        if not book_id:
-            continue
-
-        availability = get_availability(book_id)
-
-        if not availability:
-            continue
-
-        recommendations.append({
-            "book_id": book_id,
-            "title": availability.get("title"),
-            "available_copies": availability.get(
-                "available_copies",
-                0
+        result = recommendation_service.recommend_by_mood(
+            mood=mood.strip(),
+            intent=intent.strip() if intent else "",
+            difficulty=(
+                difficulty.strip()
+                if difficulty
+                else ""
             ),
-            "shelf_location": availability.get(
-                "shelf_location"
-            ),
-            "relevance": candidate.get("distance"),
-        })
+            top_k=top_k,
+        )
 
-    return {
-        "mood": mood,
-        "intent": intent,
-        "difficulty": difficulty,
-        "recommendations": recommendations,
-    }
+        return result
+
+    except Exception as exc:
+        return {
+            "success": False,
+            "error": str(exc),
+        }
 
 
-# ================================================================
-# STUDENT ASSISTANCE
-# ================================================================
+# ============================================================
+# PERSONALIZED STUDENT TOOLS
+# ============================================================
+
+"""
+IMPORTANT SECURITY RULE:
+
+The student's identity comes from the authenticated JWT.
+
+The LLM does NOT provide student_id.
+
+The flow is:
+
+JWT
+ ↓
+FastAPI
+ ↓
+LangGraph runtime context
+ ↓
+ToolRuntime
+ ↓
+runtime.context.student_id
+"""
+
 
 
 @tool
 def get_due_soon_books(
-    student_id: str,
-    days: int = 3
+    days: int = 3,
+    runtime: ToolRuntime = None,
 ) -> dict:
     """
-    Find books that are overdue or due within a specified
-    number of days.
+    Get books belonging to the authenticated student
+    that are due within the specified number of days.
     """
 
-    days = max(0, min(days, 30))
+    try:
+        if runtime is None or runtime.context is None:
+            return {
+                "success": False,
+                "error": "Authenticated student context is missing.",
+            }
 
-    dashboard = student_service.get_dashboard(
-        student_id
-    )
+        student_id = runtime.context.student_id
 
-    borrowed_books = dashboard.get(
-        "borrowed_details",
-        []
-    )
+        results = circulation_service.get_due_soon_books(
+            student_id=student_id,
+            days=days,
+        )
 
-    now = datetime.utcnow()
-    deadline = now + timedelta(days=days)
+        return {
+            "success": True,
+            "days": days,
+            "books": results,
+        }
 
-    due_soon = []
-
-    for record in borrowed_books:
-
-        due_date = record.get("due_date")
-
-        if not due_date:
-            continue
-
-        if isinstance(due_date, str):
-
-            try:
-                due_date = datetime.fromisoformat(
-                    due_date.replace("Z", "+00:00")
-                )
-
-                if due_date.tzinfo is not None:
-                    due_date = due_date.replace(
-                        tzinfo=None
-                    )
-
-            except ValueError:
-                continue
-
-        is_overdue = due_date < now
-        is_due_soon = now <= due_date <= deadline
-
-        if is_overdue or is_due_soon:
-
-            days_remaining = (
-                due_date.date() - now.date()
-            ).days
-
-            due_soon.append({
-                "book_id": record.get("book_id"),
-                "due_date": due_date.isoformat(),
-                "days_remaining": days_remaining,
-                "status": (
-                    "overdue"
-                    if is_overdue
-                    else "due_soon"
-                ),
-                "current_overdue_fine": record.get(
-                    "current_overdue_fine",
-                    0
-                ),
-            })
-
-    return {
-        "student_id": student_id,
-        "days_checked": days,
-        "books_due_soon": due_soon,
-        "count": len(due_soon),
-    }
+    except Exception as exc:
+        return {
+            "success": False,
+            "error": str(exc),
+        }
 
 
 @tool
 def get_student_dashboard(
-    student_id: str
+    runtime: ToolRuntime = None,
 ) -> dict:
     """
-    Get a student's complete library account information,
-    including borrowed books, due information, reservations
-    and outstanding fines.
+    Get the complete library dashboard for the
+    authenticated student.
+
+    Includes:
+
+    - currently issued books
+    - due dates
+    - overdue books
+    - reservations
+    - fines
+    - borrowing information
     """
 
-    return student_service.get_dashboard(
-        student_id
-    )
+    try:
+        if runtime is None or runtime.context is None:
+            return {
+                "success": False,
+                "error": "Authenticated student context is missing.",
+            }
+
+        student_id = runtime.context.student_id
+
+        result = student_service.get_dashboard(
+            student_id
+        )
+
+        return {
+            "success": True,
+            "dashboard": result,
+        }
+
+    except Exception as exc:
+        return {
+            "success": False,
+            "error": str(exc),
+        }
 
 
-# ================================================================
-# CIRCULATION
-# ================================================================
+# ============================================================
+# CIRCULATION TOOLS
+# ============================================================
 
 
 @tool
 def issue_book(
     book_id: str,
-    student_id: str
+    runtime: ToolRuntime = None,
 ) -> dict:
     """
-    Issue a book to a student if a copy is available.
+    Issue a book to the authenticated student.
+
+    The student_id is obtained securely from the
+    authenticated application context.
     """
 
-    return circulation_service.issue_book(
-        book_id,
-        student_id
-    )
+    try:
+        if runtime is None or runtime.context is None:
+            return {
+                "success": False,
+                "error": "Authenticated student context is missing.",
+            }
+
+        if not book_id or not book_id.strip():
+            return {
+                "success": False,
+                "error": "book_id is required.",
+            }
+
+        student_id = runtime.context.student_id
+
+        result = circulation_service.issue_book(
+            book_id=book_id.strip(),
+            student_id=student_id,
+        )
+
+        return result
+
+    except Exception as exc:
+        return {
+            "success": False,
+            "error": str(exc),
+        }
 
 
 @tool
 def return_book(
     book_id: str,
-    student_id: str
+    runtime: ToolRuntime = None,
 ) -> dict:
     """
-    Return a borrowed book and calculate any applicable fine.
+    Return a book currently issued to the
+    authenticated student.
     """
 
-    return circulation_service.return_book(
-        book_id,
-        student_id
-    )
+    try:
+        if runtime is None or runtime.context is None:
+            return {
+                "success": False,
+                "error": "Authenticated student context is missing.",
+            }
+
+        if not book_id or not book_id.strip():
+            return {
+                "success": False,
+                "error": "book_id is required.",
+            }
+
+        student_id = runtime.context.student_id
+
+        result = circulation_service.return_book(
+            book_id=book_id.strip(),
+            student_id=student_id,
+        )
+
+        return result
+
+    except Exception as exc:
+        return {
+            "success": False,
+            "error": str(exc),
+        }
 
 
 @tool
 def renew_book(
     book_id: str,
-    student_id: str
+    runtime: ToolRuntime = None,
 ) -> dict:
     """
-    Renew a borrowed book if renewal rules allow it.
+    Renew a book currently issued to the
+    authenticated student.
     """
 
-    return circulation_service.renew_book(
-        book_id,
-        student_id
-    )
+    try:
+        if runtime is None or runtime.context is None:
+            return {
+                "success": False,
+                "error": "Authenticated student context is missing.",
+            }
+
+        if not book_id or not book_id.strip():
+            return {
+                "success": False,
+                "error": "book_id is required.",
+            }
+
+        student_id = runtime.context.student_id
+
+        result = circulation_service.renew_book(
+            book_id=book_id.strip(),
+            student_id=student_id,
+        )
+
+        return result
+
+    except Exception as exc:
+        return {
+            "success": False,
+            "error": str(exc),
+        }
 
 
 @tool
 def reserve_book(
     book_id: str,
-    student_id: str
+    runtime: ToolRuntime = None,
 ) -> dict:
     """
-    Reserve a book when no copies are currently available.
+    Reserve a currently unavailable book for the
+    authenticated student.
     """
 
-    return circulation_service.reserve_book(
-        book_id,
-        student_id
-    )
+    try:
+        if runtime is None or runtime.context is None:
+            return {
+                "success": False,
+                "error": "Authenticated student context is missing.",
+            }
+
+        if not book_id or not book_id.strip():
+            return {
+                "success": False,
+                "error": "book_id is required.",
+            }
+
+        student_id = runtime.context.student_id
+
+        result = circulation_service.reserve_book(
+            book_id=book_id.strip(),
+            student_id=student_id,
+        )
+
+        return result
+
+    except Exception as exc:
+        return {
+            "success": False,
+            "error": str(exc),
+        }
 
 
 @tool
 def cancel_reservation(
     book_id: str,
-    student_id: str
+    runtime: ToolRuntime = None,
 ) -> dict:
     """
-    Cancel an active reservation or waitlist entry.
+    Cancel a reservation made by the
+    authenticated student.
     """
 
-    return circulation_service.cancel_reservation(
-        book_id,
-        student_id
-    )
+    try:
+        if runtime is None or runtime.context is None:
+            return {
+                "success": False,
+                "error": "Authenticated student context is missing.",
+            }
+
+        if not book_id or not book_id.strip():
+            return {
+                "success": False,
+                "error": "book_id is required.",
+            }
+
+        student_id = runtime.context.student_id
+
+        result = circulation_service.cancel_reservation(
+            book_id=book_id.strip(),
+            student_id=student_id,
+        )
+
+        return result
+
+    except Exception as exc:
+        return {
+            "success": False,
+            "error": str(exc),
+        }
 
 
-# ================================================================
-# TOOL COLLECTION
-# ================================================================
+# ============================================================
+# TOOL REGISTRY
+# ============================================================
 
 
 TOOLS = [
+    # Catalog
     search_catalog,
     check_availability,
+
+    # Recommendations
     find_best_available_book,
     recommend_for_course,
     recommend_for_goal,
     recommend_by_mood,
+
+    # Student
     get_due_soon_books,
     get_student_dashboard,
+
+    # Circulation
     issue_book,
     return_book,
     renew_book,
