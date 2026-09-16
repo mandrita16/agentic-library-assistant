@@ -5,6 +5,7 @@
 # 📚 HITK Library AI Assistant
 
 ###  Agentic RAG-powered AI Assistant for Intelligent Library Management
+**FastAPI · Groq · ChromaDB · MongoDB Atlas · RAG · Agentic Tool Calling**
 
 </div>
 
@@ -15,6 +16,27 @@ A RAG + agentic AI assistant for the college library:
 - **Structured data**: MongoDB holds live availability/circulation state (this is the part vector search can't do reliably)
 
 This two-store design (vectors for *meaning*, MongoDB for *live facts*) is the core architecture decision — explain it explicitly in your Solution Blueprint doc, it's a strong "originality" point.
+
+---
+## 🚀 Overview
+
+**MindSync** is an AI-powered library assistant designed to make college library management more intelligent, interactive, and personalized.
+
+Instead of functioning as a simple chatbot, MindSync uses an **agentic AI architecture** where the AI dynamically decides which tools it needs to answer a user's request.
+
+MindSync can:
+
+- 🔎 Search the library catalog using semantic search
+- 📚 Check real-time book availability
+- 📌 Reserve books
+- 🔄 Renew books
+- 📖 Issue and return books
+- 🎯 Recommend books based on courses, goals, skills, or mood
+- 👤 Provide personalized student information
+- 📊 Support library management and analytics
+- 💬 Maintain conversational context
+
+The system combines **Retrieval-Augmented Generation (RAG)**, **LLM reasoning**, and **structured database operations** into a single intelligent library assistant.
 
 ---
 
@@ -66,7 +88,7 @@ copy .env.example .env
 
 Open the new `.env` file in VS Code and paste in your real Anthropic API key:
 ```
-ANTHROPIC_API_KEY=sk-ant-xxxxxxxxxxxxxxxxxxxx
+GROQ_API_KEY=sk-ant-xxxxxxxxxxxxxxxxxxxx
 ```
 Leave `MONGO_URI` as-is if you installed MongoDB with default settings.
 
@@ -145,14 +167,14 @@ flowchart TD
 ```mermaid
 flowchart LR
   UQ([User Query]) --> API[FastAPI]
-  API --> CLAUDE[Claude Agent]
-  CLAUDE -->|Search Catalog| CHROMA[ChromaDB]
-  CLAUDE -->|Check Availability| MONGO[MongoDB]
-  CLAUDE -->|Reserve Book| MONGO
-  CLAUDE -->|Renew Loan| MONGO
+  API --> GROQ[Groq Agent]
+  GROQ -->|Search Catalog| CHROMA[ChromaDB]
+  GROQ -->|Check Availability| MONGO[MongoDB]
+  GROQ -->|Reserve Book| MONGO
+  GROQ -->|Renew Loan| MONGO
   CHROMA --> CLAUDE
   MONGO --> CLAUDE
-  CLAUDE --> RESP[Final Natural-language Response]
+  GROQ --> RESP[Final Natural-language Response]
 ```
 
 Unlike a traditional RAG pipeline:
@@ -163,19 +185,19 @@ Query → Retrieve → Generate
 This project follows:
 
 ```
-Query
-  ↓
-Agent Reasoning
-  ↓
+User Query
+    ↓
+Groq LLM
+    ↓
 Choose Tool
-  ↓
+    ↓
 Execute Tool
-  ↓
+    ↓
 Observe Result
-  ↓
-Choose Next Tool if Required
-  ↓
-Generate Final Response
+    ↓
+Choose Another Tool if Required
+    ↓
+Final Response
 ```
 
 ##  Example
@@ -188,21 +210,42 @@ Which ones are available?
 
 ### Agent Execution
 ```
-1. Claude receives the request
+1. User sends request
           ↓
-2. Calls search_catalog
+2. FastAPI receives request
           ↓
-3. ChromaDB returns relevant books
+3. Groq agent analyzes the request
           ↓
-4. Claude identifies candidate books
+4. Agent calls search_catalog
           ↓
-5. Calls check_availability
+5. ChromaDB retrieves relevant books
           ↓
-6. MongoDB returns live availability
+6. Agent identifies relevant results
           ↓
-7. Claude generates the final response
+7. Agent calls check_availability
+          ↓
+8. MongoDB Atlas provides live availability
+          ↓
+9. Agent generates final response
+          ↓
+10. User receives the answer
 ```
-
+   ```
+              MindSync
+                    │
+          ┌─────────┴─────────┐
+          │                   │
+      ChromaDB          MongoDB Atlas
+          │                   │
+  Semantic Search       Live Library State
+          │                   │
+          └─────────┬─────────┘
+                    │
+                AI Agent
+                    │
+              Final Answer
+   ```
+           
 ### Example Response
 
 I found 3 books relevant to NLP and CS603.
