@@ -272,6 +272,10 @@ library_ai_assistant/
 ├── data/
 │   └── sample_books.json
 │
+├─ static/
+|      ├── index.html
+|      ├── app.js
+|
 └── app/
     ├── __init__.py
     ├── config.py
@@ -297,7 +301,7 @@ library_ai_assistant/
     │   ├── student_service.py
     │   └── analytics_service.py
     │
-    ├── agent/
+    ├─ agent/
     │   ├── __init__.py
     │   ├── prompts.py
     │   ├── tools.py
