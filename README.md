@@ -50,7 +50,7 @@ The system combines **Retrieval-Augmented Generation (RAG)**, **LLM reasoning**,
 
 2. **MongoDB Community Server** — download from mongodb.com/try/download/community, install with default options. After install, MongoDB runs automatically as a Windows service on `localhost:27017` — you don't need to start anything manually.
 
-3. **An Anthropic API key** — sign up at console.anthropic.com, create a key. You'll paste it into `.env` in Step 4 below.
+3. **An Groq API key** — sign up at console.groq.com, create a key. You'll paste it into `.env` in Step 4 below.
 
 ---
 
@@ -88,7 +88,7 @@ copy .env.example .env
 
 Open the new `.env` file in VS Code and paste in your real Anthropic API key:
 ```
-GROQ_API_KEY=sk-ant-xxxxxxxxxxxxxxxxxxxx
+GROQ_API_KEY=your_groq_api_key_here
 ```
 Leave `MONGO_URI` as-is if you installed MongoDB with default settings.
 
@@ -231,19 +231,19 @@ Which ones are available?
 10. User receives the answer
 ```
    ```
-              MindSync
-                    │
+                  MindSync
+                      │
           ┌─────────┴─────────┐
-          │                   │
-      ChromaDB          MongoDB Atlas
-          │                   │
-  Semantic Search       Live Library State
-          │                   │
+          │                      │
+      ChromaDB            MongoDB Atlas
+          │                      │
+  Semantic Search         Live Library State
+          │                      │
           └─────────┬─────────┘
-                    │
-                AI Agent
-                    │
-              Final Answer
+                      │
+                  AI Agent
+                      │
+                Final Answer
    ```
            
 ### Example Response
@@ -317,7 +317,7 @@ library_ai_assistant/
 
 MindSync:
 ```
-https://agentic-library-assistant-production.up.railway.app/
+https://agentic-library-assistant-production-dfca.up.railway.app/
 ```
 ---
 ## For your Prompt Engineering Journal / Blueprint doc
