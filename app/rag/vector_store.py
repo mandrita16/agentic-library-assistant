@@ -2,40 +2,45 @@
 app/rag/vector_store.py
 -----------------------
 
-The retrieval layer of the MindSync RAG system.
+ChromaDB retrieval layer for MindSync.
 
-ChromaDB stores semantic embeddings of library books and retrieves
-books that are conceptually relevant to a natural-language query.
+Responsibilities:
+    - Convert books into searchable text
+    - Generate embeddings
+    - Store book embeddings in ChromaDB
+    - Perform semantic search
 
-This module deliberately knows NOTHING about:
-
-    - live availability
+ChromaDB does NOT handle:
+    - availability
     - borrowing
+    - returns
     - reservations
     - fines
     - students
 
-Those responsibilities belong to MongoDB and the service layer.
+MongoDB remains the source of truth for live library data.
 
 Architecture:
 
-    Book
-      ↓
+    MongoDB Books
+          |
+          v
     build_document_text()
-      ↓
-    embed_text()
-      ↓
-    ChromaDB
-
-    User Query
-      ↓
-    embed_text()
-      ↓
-    ChromaDB semantic search
-      ↓
-    Relevant book IDs
-      ↓
-    Service layer checks live MongoDB state
+          |
+          v
+       Embedding
+          |
+          v
+       ChromaDB
+          |
+          v
+    Semantic Search
+          |
+          v
+      book_id
+          |
+          v
+    MongoDB lookup
 """
 
 
@@ -68,41 +73,87 @@ _collection = _chroma_client.get_or_create_collection(
 
 def build_document_text(book: dict) -> str:
     """
-    Build the text representation that will be embedded.
+    Build the searchable text representation of a book.
 
-    The embedding includes multiple aspects of a book so that
-    semantic search can match queries based on:
+    The embedding includes:
 
         - title
         - subject
         - description
         - tags
         - course codes
+        - moods
 
-    Args:
-        book: Library book dictionary.
-
-    Returns:
-        Combined searchable text.
+    Moods are important for MindSync's
+    mood-based recommendation system.
     """
 
     if not isinstance(book, dict):
-        raise TypeError("book must be a dictionary.")
+        raise TypeError(
+            "book must be a dictionary."
+        )
+
+    # --------------------------------------------------------
+    # Basic fields
+    # --------------------------------------------------------
+
+    title = str(
+        book.get("title", "")
+    ).strip()
+
+    subject = str(
+        book.get("subject", "")
+    ).strip()
+
+    description = str(
+        book.get("description", "")
+    ).strip()
+
+    # --------------------------------------------------------
+    # Tags
+    # --------------------------------------------------------
+
+    tags = " ".join(
+        str(tag).strip()
+        for tag in book.get("tags", [])
+        if str(tag).strip()
+    )
+
+    # --------------------------------------------------------
+    # Course codes
+    # --------------------------------------------------------
+
+    course_codes = " ".join(
+        str(code).strip()
+        for code in book.get("course_codes", [])
+        if str(code).strip()
+    )
+
+    # --------------------------------------------------------
+    # Moods
+    # --------------------------------------------------------
+
+    moods = " ".join(
+        str(mood).strip()
+        for mood in book.get("moods", [])
+        if str(mood).strip()
+    )
+
+    # --------------------------------------------------------
+    # Build searchable document
+    # --------------------------------------------------------
 
     parts = [
-        str(book.get("title", "")).strip(),
-        str(book.get("subject", "")).strip(),
-        str(book.get("description", "")).strip(),
-        " ".join(
-            str(tag).strip()
-            for tag in book.get("tags", [])
-            if str(tag).strip()
-        ),
-        " ".join(
-            str(code).strip()
-            for code in book.get("course_codes", [])
-            if str(code).strip()
-        ),
+        title,
+        subject,
+        description,
+        f"Tags: {tags}" if tags else "",
+        f"Course Codes: {course_codes}"
+        if course_codes
+        else "",
+        f"Moods: {moods}"
+        if moods
+        else "",
     ]
 
     document = " | ".join(
@@ -113,15 +164,15 @@ def build_document_text(book: dict) -> str:
 
     if not document:
         raise ValueError(
-            "Book does not contain enough information to create "
-            "an embedding."
+            "Book does not contain enough information "
+            "to create an embedding."
         )
 
     return document
 
 
 # ============================================================
-# INDEXING
+# INDEX BOOKS
 # ============================================================
 
 def index_books(book_list: list[dict]) -> None:
@@ -130,15 +181,22 @@ def index_books(book_list: list[dict]) -> None:
 
     Existing books with the same book_id are updated.
 
+    MongoDB remains the source of truth.
+
     Args:
-        book_list: List of library book dictionaries.
+        book_list:
+            List of book dictionaries.
     """
 
     if not isinstance(book_list, list):
-        raise TypeError("book_list must be a list.")
+        raise TypeError(
+            "book_list must be a list."
+        )
 
     if not book_list:
-        print("[vector_store] No books to index.")
+        print(
+            "[vector_store] No books to index."
+        )
         return
 
     ids = []
@@ -149,28 +207,73 @@ def index_books(book_list: list[dict]) -> None:
     for book in book_list:
 
         if not isinstance(book, dict):
-            raise TypeError("Every book must be a dictionary.")
+            raise TypeError(
+                "Every book must be a dictionary."
+            )
 
-        book_id = str(book.get("book_id", "")).strip()
+        # ----------------------------------------------------
+        # Book ID
+        # ----------------------------------------------------
+
+        book_id = str(
+            book.get("book_id", "")
+        ).strip()
 
         if not book_id:
             raise ValueError(
-                "Every book must contain a non-empty book_id."
+                "Every book must contain "
+                "a non-empty book_id."
             )
+
+        # ----------------------------------------------------
+        # Build document
+        # ----------------------------------------------------
 
         document = build_document_text(book)
 
-        ids.append(book_id)
-        documents.append(document)
-        embeddings.append(embed_text(document))
+        # ----------------------------------------------------
+        # Generate embedding
+        # ----------------------------------------------------
 
+        embedding = embed_text(
+            document
+        )
+
+        # ----------------------------------------------------
+        # Store data
+        # ----------------------------------------------------
+
+        ids.append(book_id)
+
+        documents.append(
+            document
+        )
+
+        embeddings.append(
+            embedding
+        )
+
+        # Chroma metadata must contain
+        # simple scalar values.
         metadatas.append(
             {
-                "title": str(book.get("title", "")),
-                "author": str(book.get("author", "")),
-                "subject": str(book.get("subject", "")),
+                "title": str(
+                    book.get("title", "")
+                ),
+
+                "author": str(
+                    book.get("author", "")
+                ),
+
+                "subject": str(
+                    book.get("subject", "")
+                ),
             }
         )
+
+    # --------------------------------------------------------
+    # Upsert into ChromaDB
+    # --------------------------------------------------------
 
     _collection.upsert(
         ids=ids,
@@ -180,8 +283,8 @@ def index_books(book_list: list[dict]) -> None:
     )
 
     print(
-        f"[vector_store] Indexed {len(book_list)} "
-        f"books into ChromaDB."
+        f"[vector_store] Indexed "
+        f"{len(book_list)} books into ChromaDB."
     )
 
 
@@ -194,60 +297,124 @@ def semantic_search(
     top_k: int = 5,
 ) -> list[dict]:
     """
-    Retrieve books that are semantically similar to a query.
+    Retrieve books that are semantically similar
+    to a natural-language query.
 
     Lower Chroma distance means greater similarity.
 
-    This function only performs semantic retrieval.
-    It does NOT check live availability.
+    This function ONLY performs semantic retrieval.
+
+    It does NOT check:
+
+        - availability
+        - borrowing
+        - reservations
+        - fines
+        - students
 
     Args:
-        query: Natural-language search query.
-        top_k: Maximum number of results.
+        query:
+            Natural-language search query.
+
+        top_k:
+            Maximum number of results.
 
     Returns:
-        List of matching books containing:
+        List containing:
 
             book_id
             distance
             metadata
     """
 
+    # --------------------------------------------------------
+    # Validate query
+    # --------------------------------------------------------
+
     if not isinstance(query, str):
-        raise TypeError("query must be a string.")
+        raise TypeError(
+            "query must be a string."
+        )
 
     query = query.strip()
 
     if not query:
-        raise ValueError("query cannot be empty.")
+        raise ValueError(
+            "query cannot be empty."
+        )
+
+    # --------------------------------------------------------
+    # Validate top_k
+    # --------------------------------------------------------
 
     if not isinstance(top_k, int):
-        raise TypeError("top_k must be an integer.")
+        raise TypeError(
+            "top_k must be an integer."
+        )
 
     if top_k < 1:
-        raise ValueError("top_k must be at least 1.")
+        raise ValueError(
+            "top_k must be at least 1."
+        )
 
-    # No books indexed yet.
+    # --------------------------------------------------------
+    # Check whether Chroma has books
+    # --------------------------------------------------------
+
     collection_count = _collection.count()
 
     if collection_count == 0:
         return []
+
+    # Never request more results
+    # than the collection contains.
 
     top_k = min(
         top_k,
         collection_count,
     )
 
-    query_embedding = embed_text(query)
+    # --------------------------------------------------------
+    # Embed user query
+    # --------------------------------------------------------
+
+    query_embedding = embed_text(
+        query
+    )
+
+    # --------------------------------------------------------
+    # Query ChromaDB
+    # --------------------------------------------------------
 
     results = _collection.query(
-        query_embeddings=[query_embedding],
+        query_embeddings=[
+            query_embedding
+        ],
         n_results=top_k,
     )
 
-    ids = results.get("ids", [[]])[0]
-    distances = results.get("distances", [[]])[0]
-    metadatas = results.get("metadatas", [[]])[0]
+    # --------------------------------------------------------
+    # Extract results
+    # --------------------------------------------------------
+
+    ids = results.get(
+        "ids",
+        [[]]
+    )[0]
+
+    distances = results.get(
+        "distances",
+        [[]]
+    )[0]
+
+    metadatas = results.get(
+        "metadatas",
+        [[]]
+    )[0]
+
+    # --------------------------------------------------------
+    # Build clean response
+    # --------------------------------------------------------
 
     hits = []
 
@@ -256,9 +423,58 @@ def semantic_search(
         hits.append(
             {
                 "book_id": book_id,
-                "distance": distances[i],
-                "metadata": metadatas[i],
+
+                "distance": (
+                    distances[i]
+                    if i < len(distances)
+                    else None
+                ),
+
+                "metadata": (
+                    metadatas[i]
+                    if i < len(metadatas)
+                    else {}
+                ),
             }
         )
 
     return hits
+
+
+# ============================================================
+# COLLECTION INFORMATION
+# ============================================================
+
+def get_collection_count() -> int:
+    """
+    Return the number of books currently indexed
+    in ChromaDB.
+    """
+
+    return _collection.count()
+
+
+# ============================================================
+# CLEAR COLLECTION
+# ============================================================
+
+def clear_collection() -> None:
+    """
+    Delete all indexed books from the ChromaDB collection.
+
+    Useful when rebuilding the complete vector index.
+    """
+
+    global _collection
+
+    _chroma_client.delete_collection(
+        name=CHROMA_COLLECTION_NAME
+    )
+
+    _collection = _chroma_client.get_or_create_collection(
+        name=CHROMA_COLLECTION_NAME
+    )
+
+    print(
+        "[vector_store] ChromaDB collection cleared."
+    )

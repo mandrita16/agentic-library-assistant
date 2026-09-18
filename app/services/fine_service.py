@@ -2,15 +2,25 @@
 app/services/fine_service.py
 ----------------------------
 
-All fine-related calculations and balance operations live here.
+Fine-related calculations and balance operations.
 
-This keeps fine logic separate from circulation_service.py so
-the same functionality can be reused by:
+Responsibilities:
+- Calculate overdue fines
+- Add fines to student accounts
+- Get outstanding fine balance
+- Pay outstanding fines
 
-    - Return flow
-    - Student dashboard
-    - Due-date assistance
-    - Future payment-status endpoints
+Business logic remains separate from:
+- agent.py
+- tools.py
+- API routes
+
+This service can be reused by:
+- Return flow
+- Student dashboard
+- Due-date assistance
+- Fine/payment endpoints
+- MindSync agent
 """
 
 from datetime import datetime
@@ -23,28 +33,39 @@ from app.database.mongo import students_collection
 # FINE CALCULATION
 # ============================================================
 
-
 def calculate_overdue_fine(
     due_date: datetime,
     return_date: datetime | None = None,
 ) -> float:
     """
-    Calculate the overdue fine for a single borrow record.
+    Calculate the overdue fine for a borrow record.
 
-    If return_date is None, calculate the fine as of the
-    current time.
+    Fine:
+        overdue days × FINE_PER_DAY
 
-    Fine = overdue days × FINE_PER_DAY
+    If return_date is None, the fine is calculated
+    using the current UTC time.
+
+    Returns:
+        float: calculated fine amount
     """
 
     if due_date is None:
         return 0.0
+
+    # --------------------------------------------------------
+    # Determine comparison date
+    # --------------------------------------------------------
 
     compare_date = (
         return_date
         if return_date is not None
         else datetime.utcnow()
     )
+
+    # --------------------------------------------------------
+    # Calculate overdue days
+    # --------------------------------------------------------
 
     overdue_days = (
         compare_date - due_date
@@ -53,8 +74,16 @@ def calculate_overdue_fine(
     if overdue_days <= 0:
         return 0.0
 
+    # --------------------------------------------------------
+    # Calculate fine
+    # --------------------------------------------------------
+
+    fine = (
+        overdue_days * FINE_PER_DAY
+    )
+
     return round(
-        overdue_days * FINE_PER_DAY,
+        float(fine),
         2,
     )
 
@@ -63,34 +92,69 @@ def calculate_overdue_fine(
 # ADD FINE
 # ============================================================
 
-
 def add_fine_to_student(
     student_id: str,
     amount: float,
-) -> None:
+) -> dict:
     """
-    Add a fine to an existing student's outstanding balance.
+    Add a fine to a student's outstanding balance.
 
-    Invalid or non-positive amounts are ignored.
+    Returns a structured result instead of silently
+    failing so callers can handle the result safely.
     """
 
-    if not isinstance(student_id, str):
-        return
+    # --------------------------------------------------------
+    # Validate student ID
+    # --------------------------------------------------------
+
+    if not isinstance(
+        student_id,
+        str,
+    ):
+        return {
+            "success": False,
+            "message": "student_id is required.",
+        }
 
     student_id = student_id.strip()
 
     if not student_id:
-        return
+        return {
+            "success": False,
+            "message": "student_id is required.",
+        }
 
-    if not isinstance(amount, (int, float)):
-        return
+    # --------------------------------------------------------
+    # Validate amount
+    # --------------------------------------------------------
+
+    if not isinstance(
+        amount,
+        (int, float),
+    ):
+        return {
+            "success": False,
+            "message": "Fine amount must be numeric.",
+        }
 
     if amount <= 0:
-        return
+        return {
+            "success": False,
+            "message": (
+                "Fine amount must be greater than zero."
+            ),
+        }
 
-    amount = round(float(amount), 2)
+    amount = round(
+        float(amount),
+        2,
+    )
 
-    students_collection.update_one(
+    # --------------------------------------------------------
+    # Update student balance
+    # --------------------------------------------------------
+
+    result = students_collection.update_one(
         {
             "student_id": student_id,
         },
@@ -101,26 +165,64 @@ def add_fine_to_student(
         },
     )
 
+    # --------------------------------------------------------
+    # Verify student exists
+    # --------------------------------------------------------
+
+    if result.matched_count == 0:
+        return {
+            "success": False,
+            "message": (
+                f"Student {student_id} was not found."
+            ),
+        }
+
+    # --------------------------------------------------------
+    # Get updated balance
+    # --------------------------------------------------------
+
+    new_balance = get_outstanding_fine(
+        student_id
+    )
+
+    return {
+        "success": True,
+        "message": (
+            f"₹{amount:.2f} fine added successfully."
+        ),
+        "amount_added": amount,
+        "outstanding_balance": new_balance,
+    }
+
 
 # ============================================================
 # GET OUTSTANDING FINE
 # ============================================================
-
 
 def get_outstanding_fine(
     student_id: str,
 ) -> float:
     """
     Return the student's current outstanding fine.
+
+    Returns:
+        float: outstanding fine balance
     """
 
-    if not isinstance(student_id, str):
+    if not isinstance(
+        student_id,
+        str,
+    ):
         return 0.0
 
     student_id = student_id.strip()
 
     if not student_id:
         return 0.0
+
+    # --------------------------------------------------------
+    # Find student
+    # --------------------------------------------------------
 
     student = students_collection.find_one(
         {
@@ -135,13 +237,25 @@ def get_outstanding_fine(
     if not student:
         return 0.0
 
-    return round(
-        float(
+    # --------------------------------------------------------
+    # Safely convert balance
+    # --------------------------------------------------------
+
+    try:
+        balance = float(
             student.get(
                 "outstanding_fine",
                 0.0,
             )
-        ),
+        )
+    except (
+        TypeError,
+        ValueError,
+    ):
+        balance = 0.0
+
+    return round(
+        max(balance, 0.0),
         2,
     )
 
@@ -150,22 +264,31 @@ def get_outstanding_fine(
 # PAY FINE
 # ============================================================
 
-
 def pay_fine(
     student_id: str,
     amount: float,
 ) -> dict:
     """
-    Reduce the student's outstanding fine.
+    Pay part or all of a student's outstanding fine.
 
     Payment must:
-
         - have a valid student ID
+        - be numeric
         - be greater than zero
-        - not exceed the current outstanding balance
+        - not exceed the outstanding balance
+
+    Returns:
+        dict containing payment result and remaining balance.
     """
 
-    if not isinstance(student_id, str):
+    # --------------------------------------------------------
+    # Validate student ID
+    # --------------------------------------------------------
+
+    if not isinstance(
+        student_id,
+        str,
+    ):
         return {
             "success": False,
             "message": "student_id is required.",
@@ -179,10 +302,19 @@ def pay_fine(
             "message": "student_id is required.",
         }
 
-    if not isinstance(amount, (int, float)):
+    # --------------------------------------------------------
+    # Validate payment amount
+    # --------------------------------------------------------
+
+    if not isinstance(
+        amount,
+        (int, float),
+    ):
         return {
             "success": False,
-            "message": "Payment amount must be numeric.",
+            "message": (
+                "Payment amount must be numeric."
+            ),
         }
 
     if amount <= 0:
@@ -198,18 +330,44 @@ def pay_fine(
         2,
     )
 
-    current = get_outstanding_fine(
+    # --------------------------------------------------------
+    # Get current balance
+    # --------------------------------------------------------
+
+    current_balance = get_outstanding_fine(
         student_id
     )
 
-    if amount > current:
+    # --------------------------------------------------------
+    # Check balance
+    # --------------------------------------------------------
+
+    if current_balance <= 0:
         return {
             "success": False,
             "message": (
-                f"Amount exceeds outstanding fine "
-                f"of ₹{current:.2f}."
+                "You do not have any outstanding fine."
             ),
         }
+
+    # --------------------------------------------------------
+    # Prevent overpayment
+    # --------------------------------------------------------
+
+    if amount > current_balance:
+        return {
+            "success": False,
+            "message": (
+                f"Payment amount exceeds the "
+                f"outstanding fine of "
+                f"₹{current_balance:.2f}."
+            ),
+            "outstanding_balance": current_balance,
+        }
+
+    # --------------------------------------------------------
+    # Atomic balance update
+    # --------------------------------------------------------
 
     result = students_collection.update_one(
         {
@@ -225,6 +383,10 @@ def pay_fine(
         },
     )
 
+    # --------------------------------------------------------
+    # Check whether update succeeded
+    # --------------------------------------------------------
+
     if result.modified_count == 0:
         return {
             "success": False,
@@ -234,17 +396,19 @@ def pay_fine(
             ),
         }
 
-    remaining = round(
-        current - amount,
-        2,
+    # --------------------------------------------------------
+    # Get actual remaining balance
+    # --------------------------------------------------------
+
+    remaining_balance = get_outstanding_fine(
+        student_id
     )
 
     return {
         "success": True,
         "message": (
-            f"₹{amount:.2f} paid successfully. "
-            f"Remaining balance: ₹{remaining:.2f}."
+            f"₹{amount:.2f} paid successfully."
         ),
         "amount_paid": amount,
-        "remaining_balance": remaining,
+        "remaining_balance": remaining_balance,
     }

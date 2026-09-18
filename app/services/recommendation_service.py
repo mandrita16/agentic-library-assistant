@@ -4,23 +4,116 @@ services/recommendation_service.py
 
 Compound recommendation logic for MindSync.
 
-This service is different from book_service.py:
+Responsibilities:
 
-book_service.py
-    → catalog access and semantic retrieval
+    - Semantic book retrieval
+    - Live MongoDB availability
+    - Course-based recommendations
+    - Goal-based recommendations
+    - Mood-based recommendations
+    - Best available book selection
 
-recommendation_service.py
-    → combines retrieval + live data + decision-making
+Important:
 
-This is one of the main places where MindSync demonstrates
-agentic behavior.
+    This service does NOT call the LLM.
+
+    Therefore it does not directly consume Groq tokens.
+
+    The goal is to keep tool responses compact so that
+    the agent has less data to send back to the LLM.
 """
 
 from app.rag.vector_store import semantic_search
-from app.services.book_service import (
-    get_book_by_id,
-    get_availability,
-)
+from app.services.book_service import get_book_by_id
+
+
+# ============================================================
+# CONSTANTS
+# ============================================================
+
+MAX_TOP_K = 20
+
+
+def _normalize_top_k(top_k: int, default: int = 5) -> int:
+    """
+    Keep retrieval size within a safe range.
+    """
+
+    if not isinstance(top_k, int):
+        top_k = default
+
+    return max(
+        1,
+        min(top_k, MAX_TOP_K),
+    )
+
+
+def _compact_book(
+    book: dict,
+    include_total: bool = False,
+) -> dict:
+    """
+    Convert a MongoDB book document into a compact
+    tool response.
+
+    Keeping tool output small helps reduce the amount
+    of context sent back to the LLM.
+    """
+
+    result = {
+        "book_id": book.get("book_id"),
+        "title": book.get("title"),
+        "author": book.get("author"),
+        "subject": book.get("subject"),
+        "available_copies": book.get(
+            "available_copies",
+            0,
+        ),
+        "shelf_location": book.get(
+            "shelf_location",
+        ),
+    }
+
+    if include_total:
+        result["total_copies"] = book.get(
+            "total_copies",
+            0,
+        )
+
+    return result
+
+
+def _get_candidate_books(
+    candidates: list[dict],
+) -> list[dict]:
+    """
+    Resolve Chroma candidates against MongoDB.
+
+    MongoDB remains the source of truth.
+
+    Each candidate results in only ONE MongoDB lookup.
+    """
+
+    books = []
+
+    for candidate in candidates:
+
+        if not isinstance(candidate, dict):
+            continue
+
+        book_id = candidate.get("book_id")
+
+        if not book_id:
+            continue
+
+        book = get_book_by_id(book_id)
+
+        if not book:
+            continue
+
+        books.append(book)
+
+    return books
 
 
 # ============================================================
@@ -33,35 +126,41 @@ def find_best_available_book(
     top_k: int = 5,
 ) -> dict:
     """
-    Find the most relevant book that is currently available.
+    Find the most relevant currently available book.
 
     Pipeline:
 
-        Natural-language query
-                ↓
-        Semantic retrieval
-                ↓
-        Candidate books
-                ↓
-        Live MongoDB availability check
-                ↓
-        Select first available candidate
-
-    If none of the candidates are available, return the most
-    relevant book with a clear unavailable status.
+        Query
+          ↓
+        ChromaDB semantic search
+          ↓
+        MongoDB catalog lookup
+          ↓
+        Availability check
+          ↓
+        Best available book
     """
 
-    if not query or not query.strip():
+    if not isinstance(query, str):
         return {
             "success": False,
             "found": False,
             "message": "Search query is required.",
         }
 
-    top_k = max(1, min(top_k, 20))
+    query = query.strip()
+
+    if not query:
+        return {
+            "success": False,
+            "found": False,
+            "message": "Search query is required.",
+        }
+
+    top_k = _normalize_top_k(top_k)
 
     candidates = semantic_search(
-        query=query.strip(),
+        query=query,
         top_k=top_k,
     )
 
@@ -69,96 +168,77 @@ def find_best_available_book(
         return {
             "success": True,
             "found": False,
-            "message": "No matching books found in the catalog.",
+            "message": (
+                "No matching books found in the catalog."
+            ),
+        }
+
+    books = _get_candidate_books(
+        candidates
+    )
+
+    if not books:
+        return {
+            "success": True,
+            "found": False,
+            "message": (
+                "Matching books were found, "
+                "but their catalog records are unavailable."
+            ),
         }
 
     # --------------------------------------------------------
-    # Check candidates in semantic relevance order.
+    # First available book
     # --------------------------------------------------------
 
-    for candidate in candidates:
+    for book in books:
 
-        book_id = candidate.get("book_id")
+        if book.get(
+            "available_copies",
+            0,
+        ) > 0:
 
-        if not book_id:
-            continue
+            result = _compact_book(
+                book,
+                include_total=True,
+            )
 
-        availability = get_availability(book_id)
+            result.update(
+                {
+                    "success": True,
+                    "found": True,
+                    "available_now": True,
+                }
+            )
 
-        if not availability:
-            continue
-
-        if availability.get("available_copies", 0) > 0:
-
-            return {
-                "success": True,
-                "found": True,
-                "available_now": True,
-                "book_id": book_id,
-                "title": availability.get("title"),
-                "available_copies": availability.get(
-                    "available_copies",
-                    0,
-                ),
-                "total_copies": availability.get(
-                    "total_copies",
-                    0,
-                ),
-                "shelf_location": availability.get(
-                    "shelf_location",
-                ),
-            }
+            return result
 
     # --------------------------------------------------------
-    # Nothing available.
+    # No available books.
     #
-    # Return the most relevant valid catalog book.
+    # Return the most relevant book.
     # --------------------------------------------------------
 
-    for candidate in candidates:
+    best_book = books[0]
 
-        book_id = candidate.get("book_id")
+    result = _compact_book(
+        best_book,
+        include_total=True,
+    )
 
-        if not book_id:
-            continue
-
-        book = get_book_by_id(book_id)
-
-        if not book:
-            continue
-
-        availability = get_availability(book_id)
-
-        return {
+    result.update(
+        {
             "success": True,
             "found": True,
             "available_now": False,
-            "book_id": book_id,
-            "title": book.get("title"),
-            "available_copies": (
-                availability.get("available_copies", 0)
-                if availability
-                else 0
-            ),
-            "shelf_location": (
-                availability.get("shelf_location")
-                if availability
-                else book.get("shelf_location")
-            ),
             "message": (
                 "Best matching book found, but no copies "
                 "are currently available. Consider reserving it."
             ),
         }
+    )
 
-    return {
-        "success": True,
-        "found": False,
-        "message": (
-            "Matching books were found in semantic search, "
-            "but their catalog records are no longer available."
-        ),
-    }
+    return result
 
 
 # ============================================================
@@ -174,18 +254,10 @@ def recommend_for_course(
     """
     Recommend books for a course and optional weak topic.
 
-    Pipeline:
-
-        Course + weak topic
-                ↓
-        Semantic retrieval
-                ↓
-        Live availability lookup
-                ↓
-        Ranked shortlist
+    No LLM is used.
     """
 
-    if not course_code or not course_code.strip():
+    if not isinstance(course_code, str):
         return {
             "success": False,
             "message": "course_code is required.",
@@ -193,67 +265,46 @@ def recommend_for_course(
 
     course_code = course_code.strip()
 
-    query_parts = [course_code]
+    if not course_code:
+        return {
+            "success": False,
+            "message": "course_code is required.",
+        }
 
-    if weak_topic and weak_topic.strip():
-        query_parts.append(weak_topic.strip())
+    query_parts = [
+        course_code
+    ]
 
-    query = " ".join(query_parts)
+    if isinstance(weak_topic, str):
+        weak_topic = weak_topic.strip()
 
-    top_k = max(1, min(top_k, 20))
+        if weak_topic:
+            query_parts.append(
+                weak_topic
+            )
+
+    query = " ".join(
+        query_parts
+    )
+
+    top_k = _normalize_top_k(
+        top_k,
+        default=3,
+    )
 
     candidates = semantic_search(
         query=query,
         top_k=top_k,
     )
 
-    recommendations = []
+    books = _get_candidate_books(
+        candidates
+    )
 
-    for candidate in candidates:
-
-        book_id = candidate.get("book_id")
-
-        if not book_id:
-            continue
-
-        book = get_book_by_id(book_id)
-
-        if not book:
-            continue
-
-        availability = get_availability(book_id)
-
-        recommendations.append(
-            {
-                "book_id": book_id,
-                "title": book.get("title"),
-                "author": book.get("author"),
-                "subject": book.get("subject"),
-                "available_copies": (
-                    availability.get(
-                        "available_copies",
-                        0,
-                    )
-                    if availability
-                    else 0
-                ),
-                "total_copies": (
-                    availability.get(
-                        "total_copies",
-                        0,
-                    )
-                    if availability
-                    else 0
-                ),
-                "shelf_location": (
-                    availability.get(
-                        "shelf_location"
-                    )
-                    if availability
-                    else book.get("shelf_location")
-                ),
-            }
-        )
+    recommendations = [
+        _compact_book(book)
+        for book in books
+    ]
 
     return {
         "success": True,
@@ -275,78 +326,69 @@ def recommend_for_goal(
     top_k: int = 5,
 ) -> dict:
     """
-    Recommend books for a student's learning or career goal.
+    Recommend books for a learning or career goal.
 
-    The goal, current skills, and desired topics are combined
-    into a semantic retrieval query.
+    Semantic retrieval is performed directly against
+    the vector store.
+
+    No LLM is used.
     """
 
-    if not goal or not goal.strip():
+    if not isinstance(goal, str):
+        return {
+            "success": False,
+            "message": "goal is required.",
+        }
+
+    goal = goal.strip()
+
+    if not goal:
         return {
             "success": False,
             "message": "goal is required.",
         }
 
     query_parts = [
-        goal.strip(),
+        goal
     ]
 
-    if current_skills and current_skills.strip():
-        query_parts.append(
-            f"Current skills: {current_skills.strip()}"
-        )
+    if isinstance(current_skills, str):
+        current_skills = current_skills.strip()
 
-    if topics and topics.strip():
-        query_parts.append(
-            f"Topics: {topics.strip()}"
-        )
+        if current_skills:
+            query_parts.append(
+                f"Current skills: {current_skills}"
+            )
 
-    query = " | ".join(query_parts)
+    if isinstance(topics, str):
+        topics = topics.strip()
+
+        if topics:
+            query_parts.append(
+                f"Topics: {topics}"
+            )
+
+    query = " | ".join(
+        query_parts
+    )
+
+    top_k = _normalize_top_k(
+        top_k
+    )
 
     candidates = semantic_search(
         query=query,
-        top_k=max(1, min(top_k, 20)),
+        top_k=top_k,
     )
 
-    recommendations = []
+    books = _get_candidate_books(
+        candidates
+    )
 
-    for candidate in candidates:
-
-        book_id = candidate.get("book_id")
-
-        if not book_id:
-            continue
-
-        book = get_book_by_id(book_id)
-
-        if not book:
-            continue
-
-        availability = get_availability(book_id)
-
-        recommendations.append(
-            {
-                "book_id": book_id,
-                "title": book.get("title"),
-                "author": book.get("author"),
-                "subject": book.get("subject"),
-                "available_copies": (
-                    availability.get(
-                        "available_copies",
-                        0,
-                    )
-                    if availability
-                    else 0
-                ),
-                "shelf_location": (
-                    availability.get(
-                        "shelf_location"
-                    )
-                    if availability
-                    else book.get("shelf_location")
-                ),
-            }
-        )
+    recommendations = [
+        _compact_book(book)
+        for book in books
+    ]
 
     return {
         "success": True,
@@ -367,76 +409,79 @@ def recommend_by_mood(
     top_k: int = 5,
 ) -> dict:
     """
-    Recommend books based on mood, reading intent,
-    and optional difficulty.
+    Recommend books based on:
+
+        - mood
+        - reading intent
+        - difficulty
+
+    No LLM is used.
+
+    Example:
+
+        mood = stressed
+        intent = relaxing
+
+    becomes:
+
+        "stressed | Reading intent: relaxing"
     """
 
-    if not mood or not mood.strip():
+    if not isinstance(mood, str):
+        return {
+            "success": False,
+            "message": "mood is required.",
+        }
+
+    mood = mood.strip()
+
+    if not mood:
         return {
             "success": False,
             "message": "mood is required.",
         }
 
     query_parts = [
-        mood.strip(),
+        mood
     ]
 
-    if intent and intent.strip():
-        query_parts.append(
-            f"Reading intent: {intent.strip()}"
-        )
+    if isinstance(intent, str):
+        intent = intent.strip()
 
-    if difficulty and difficulty.strip():
-        query_parts.append(
-            f"Difficulty: {difficulty.strip()}"
-        )
+        if intent:
+            query_parts.append(
+                f"Reading intent: {intent}"
+            )
 
-    query = " | ".join(query_parts)
+    if isinstance(difficulty, str):
+        difficulty = difficulty.strip()
+
+        if difficulty:
+            query_parts.append(
+                f"Difficulty: {difficulty}"
+            )
+
+    query = " | ".join(
+        query_parts
+    )
+
+    top_k = _normalize_top_k(
+        top_k
+    )
 
     candidates = semantic_search(
         query=query,
-        top_k=max(1, min(top_k, 20)),
+        top_k=top_k,
     )
 
-    recommendations = []
+    books = _get_candidate_books(
+        candidates
+    )
 
-    for candidate in candidates:
-
-        book_id = candidate.get("book_id")
-
-        if not book_id:
-            continue
-
-        book = get_book_by_id(book_id)
-
-        if not book:
-            continue
-
-        availability = get_availability(book_id)
-
-        recommendations.append(
-            {
-                "book_id": book_id,
-                "title": book.get("title"),
-                "author": book.get("author"),
-                "subject": book.get("subject"),
-                "available_copies": (
-                    availability.get(
-                        "available_copies",
-                        0,
-                    )
-                    if availability
-                    else 0
-                ),
-                "shelf_location": (
-                    availability.get(
-                        "shelf_location"
-                    )
-                    if availability
-                    else book.get("shelf_location")
-                ),
-            }
-        )
+    recommendations = [
+        _compact_book(book)
+        for book in books
+    ]
 
     return {
         "success": True,

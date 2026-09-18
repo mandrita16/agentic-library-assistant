@@ -12,6 +12,7 @@ Library circulation business logic:
 - Due-date handling
 - Waitlist handling
 - Overdue fines
+- Student borrowing lookup
 
 MongoDB is the source of truth for circulation state.
 
@@ -39,16 +40,7 @@ from app.services.fine_service import (
 # ISSUE BOOK
 # ============================================================
 
-
 def issue_book(book_id: str, student_id: str) -> dict:
-    """
-    Issue one available copy of a book to a student.
-
-    Rules:
-    - Book must exist.
-    - A copy must be available.
-    - Student must not already have the same book issued.
-    """
 
     if not book_id or not book_id.strip():
         return {
@@ -65,10 +57,6 @@ def issue_book(book_id: str, student_id: str) -> dict:
     book_id = book_id.strip()
     student_id = student_id.strip()
 
-    # --------------------------------------------------------
-    # Prevent duplicate active borrowing
-    # --------------------------------------------------------
-
     existing_record = borrow_records_collection.find_one(
         {
             "book_id": book_id,
@@ -83,10 +71,6 @@ def issue_book(book_id: str, student_id: str) -> dict:
             "message": "You already have this book issued.",
         }
 
-    # --------------------------------------------------------
-    # Check whether the student has a READY reservation
-    # --------------------------------------------------------
-
     ready_reservation = reservations_collection.find_one(
         {
             "book_id": book_id,
@@ -94,11 +78,6 @@ def issue_book(book_id: str, student_id: str) -> dict:
             "status": "ready",
         }
     )
-
-    # --------------------------------------------------------
-    # If another student's reservation is ready, don't allow
-    # an unrelated student to take the held copy.
-    # --------------------------------------------------------
 
     other_ready_reservation = reservations_collection.find_one(
         {
@@ -117,17 +96,15 @@ def issue_book(book_id: str, student_id: str) -> dict:
             ),
         }
 
-    # --------------------------------------------------------
-    # Atomically claim one available copy
-    # --------------------------------------------------------
-
     book = books_collection.find_one_and_update(
         {
             "book_id": book_id,
             "available_copies": {"$gt": 0},
         },
         {
-            "$inc": {"available_copies": -1},
+            "$inc": {
+                "available_copies": -1
+            },
         },
         return_document=ReturnDocument.AFTER,
     )
@@ -140,10 +117,6 @@ def issue_book(book_id: str, student_id: str) -> dict:
                 "Use reserve_book to join the waitlist instead."
             ),
         }
-
-    # --------------------------------------------------------
-    # Create borrowing record
-    # --------------------------------------------------------
 
     now = datetime.utcnow()
     due_date = now + timedelta(days=LOAN_PERIOD_DAYS)
@@ -161,10 +134,6 @@ def issue_book(book_id: str, student_id: str) -> dict:
             "renewal_count": 0,
         }
     )
-
-    # --------------------------------------------------------
-    # Consume ready reservation if this issue fulfilled it
-    # --------------------------------------------------------
 
     if ready_reservation:
         reservations_collection.update_one(
@@ -195,14 +164,7 @@ def issue_book(book_id: str, student_id: str) -> dict:
 # RETURN BOOK
 # ============================================================
 
-
 def return_book(book_id: str, student_id: str) -> dict:
-    """
-    Return a book currently issued to the authenticated student.
-
-    Calculates overdue fine and moves the next waiting reservation
-    to READY status.
-    """
 
     if not book_id or not book_id.strip():
         return {
@@ -218,10 +180,6 @@ def return_book(book_id: str, student_id: str) -> dict:
 
     book_id = book_id.strip()
     student_id = student_id.strip()
-
-    # --------------------------------------------------------
-    # Atomically mark the active borrowing record as returned
-    # --------------------------------------------------------
 
     now = datetime.utcnow()
 
@@ -249,10 +207,6 @@ def return_book(book_id: str, student_id: str) -> dict:
             ),
         }
 
-    # --------------------------------------------------------
-    # Calculate fine
-    # --------------------------------------------------------
-
     fine = calculate_overdue_fine(
         record["due_date"],
         now,
@@ -264,22 +218,16 @@ def return_book(book_id: str, student_id: str) -> dict:
             fine,
         )
 
-    # --------------------------------------------------------
-    # Return physical copy
-    # --------------------------------------------------------
-
     books_collection.update_one(
-        {"book_id": book_id},
+        {
+            "book_id": book_id
+        },
         {
             "$inc": {
-                "available_copies": 1,
+                "available_copies": 1
             }
         },
     )
-
-    # --------------------------------------------------------
-    # Promote the first waiting reservation
-    # --------------------------------------------------------
 
     next_in_line = reservations_collection.find_one_and_update(
         {
@@ -309,8 +257,8 @@ def return_book(book_id: str, student_id: str) -> dict:
 
     if next_in_line:
         message += (
-            f" The book is now ready for the next student "
-            f"in the reservation queue."
+            " The book is now ready for the next "
+            "student in the reservation queue."
         )
 
     return {
@@ -324,16 +272,7 @@ def return_book(book_id: str, student_id: str) -> dict:
 # RENEW BOOK
 # ============================================================
 
-
 def renew_book(book_id: str, student_id: str) -> dict:
-    """
-    Renew an active borrowing record.
-
-    Renewal is denied when:
-    - The student doesn't currently have the book.
-    - Maximum renewals have been reached.
-    - Another student is waiting for the book.
-    """
 
     if not book_id or not book_id.strip():
         return {
@@ -376,10 +315,6 @@ def renew_book(book_id: str, student_id: str) -> dict:
             ),
         }
 
-    # --------------------------------------------------------
-    # Waiting students prevent renewal
-    # --------------------------------------------------------
-
     someone_waiting = reservations_collection.find_one(
         {
             "book_id": book_id,
@@ -395,10 +330,6 @@ def renew_book(book_id: str, student_id: str) -> dict:
                 "is waiting for this book."
             ),
         }
-
-    # --------------------------------------------------------
-    # Atomic renewal update
-    # --------------------------------------------------------
 
     new_due_date = (
         record["due_date"]
@@ -436,7 +367,7 @@ def renew_book(book_id: str, student_id: str) -> dict:
     return {
         "success": True,
         "message": (
-            f"Renewed successfully. "
+            "Renewed successfully. "
             f"New due date: "
             f"{new_due_date.strftime('%d %b %Y')}."
         ),
@@ -449,14 +380,7 @@ def renew_book(book_id: str, student_id: str) -> dict:
 # RESERVE BOOK
 # ============================================================
 
-
 def reserve_book(book_id: str, student_id: str) -> dict:
-    """
-    Add a student to the reservation waitlist.
-
-    Reservation is allowed only when no copies are currently
-    available.
-    """
 
     if not book_id or not book_id.strip():
         return {
@@ -474,7 +398,9 @@ def reserve_book(book_id: str, student_id: str) -> dict:
     student_id = student_id.strip()
 
     book = books_collection.find_one(
-        {"book_id": book_id}
+        {
+            "book_id": book_id
+        }
     )
 
     if book is None:
@@ -492,16 +418,15 @@ def reserve_book(book_id: str, student_id: str) -> dict:
             ),
         }
 
-    # --------------------------------------------------------
-    # Prevent duplicate active reservation
-    # --------------------------------------------------------
-
     existing = reservations_collection.find_one(
         {
             "book_id": book_id,
             "student_id": student_id,
             "status": {
-                "$in": ["waiting", "ready"],
+                "$in": [
+                    "waiting",
+                    "ready",
+                ],
             },
         }
     )
@@ -515,17 +440,13 @@ def reserve_book(book_id: str, student_id: str) -> dict:
             ),
         }
 
-    # --------------------------------------------------------
-    # Determine next queue position
-    # --------------------------------------------------------
-
     last_reservation = reservations_collection.find_one(
         {
             "book_id": book_id,
             "status": "waiting",
         },
         sort=[
-            ("queue_position", -1),
+            ("queue_position", -1)
         ],
     )
 
@@ -535,10 +456,6 @@ def reserve_book(book_id: str, student_id: str) -> dict:
         )
     else:
         queue_position = 1
-
-    # --------------------------------------------------------
-    # Create reservation
-    # --------------------------------------------------------
 
     reservation_id = str(uuid.uuid4())
     now = datetime.utcnow()
@@ -570,17 +487,10 @@ def reserve_book(book_id: str, student_id: str) -> dict:
 # CANCEL RESERVATION
 # ============================================================
 
-
 def cancel_reservation(
     book_id: str,
     student_id: str,
 ) -> dict:
-    """
-    Cancel an active reservation.
-
-    Waiting reservations are removed from the active queue.
-    Ready reservations are also cancelled.
-    """
 
     if not book_id or not book_id.strip():
         return {
@@ -602,7 +512,10 @@ def cancel_reservation(
             "book_id": book_id,
             "student_id": student_id,
             "status": {
-                "$in": ["waiting", "ready"],
+                "$in": [
+                    "waiting",
+                    "ready",
+                ],
             },
         },
         {
@@ -622,12 +535,8 @@ def cancel_reservation(
             ),
         }
 
-    # --------------------------------------------------------
-    # Only waiting reservations occupy queue positions.
-    # --------------------------------------------------------
-
     if reservation["status"] == "waiting":
-        # Remove the cancelled student from the active waitlist order.
+
         reservations_collection.update_many(
             {
                 "book_id": book_id,
@@ -644,9 +553,7 @@ def cancel_reservation(
         )
 
     elif reservation["status"] == "ready":
-        # A ready reservation owns the currently available copy. If that
-        # student cancels, the copy should be offered to the next student
-        # in the waiting queue instead of leaving the queue inconsistent.
+
         next_in_line = reservations_collection.find_one_and_update(
             {
                 "book_id": book_id,
@@ -665,9 +572,8 @@ def cancel_reservation(
             return_document=ReturnDocument.AFTER,
         )
 
-        # The ready reservation is no longer consuming a reservation slot.
-        # Compact the remaining waiting positions so the queue stays clean.
         if next_in_line:
+
             reservations_collection.update_many(
                 {
                     "book_id": book_id,
@@ -693,20 +599,18 @@ def cancel_reservation(
 # DUE SOON
 # ============================================================
 
-
 def get_due_soon_books(
     student_id: str,
     days: int = 3,
 ) -> list[dict]:
-    """
-    Return books currently issued to a student that are due
-    within the next `days` days.
-    """
 
     if not student_id or not student_id.strip():
         return []
 
-    days = max(0, min(days, 30))
+    days = max(
+        0,
+        min(days, 30)
+    )
 
     now = datetime.utcnow()
     deadline = now + timedelta(days=days)
@@ -731,3 +635,133 @@ def get_due_soon_books(
         results.append(record)
 
     return results
+
+
+# ============================================================
+# GET STUDENT BORROWINGS
+# ============================================================
+
+def get_student_borrowings(student_id: str) -> dict:
+    """
+    Get all currently borrowed books for a student.
+
+    IMPORTANT:
+    An empty result is NOT an error.
+
+    Example:
+        STU001 has no books
+        ->
+        success=True
+        borrowings=[]
+    """
+
+    if not student_id or not student_id.strip():
+        return {
+            "success": False,
+            "message": "student_id is required.",
+            "borrowings": [],
+        }
+
+    student_id = student_id.strip()
+
+    records = list(
+        borrow_records_collection.find(
+            {
+                "student_id": student_id,
+                "status": "issued",
+            },
+            {
+                "_id": 0,
+            },
+        )
+    )
+
+    # --------------------------------------------------------
+    # IMPORTANT:
+    # No records means the student simply has no books.
+    # It does NOT mean the service is unavailable.
+    # --------------------------------------------------------
+
+    if not records:
+        return {
+            "success": True,
+            "student_id": student_id,
+            "borrowings": [],
+            "count": 0,
+            "message": "You currently have no borrowed books.",
+        }
+
+    # --------------------------------------------------------
+    # Attach book information
+    # --------------------------------------------------------
+
+    borrowings = []
+
+    for record in records:
+
+        book = books_collection.find_one(
+            {
+                "book_id": record.get("book_id"),
+            },
+            {
+                "_id": 0,
+            },
+        )
+
+        borrowing = {
+            "record_id": record.get("record_id"),
+            "book_id": record.get("book_id"),
+            "issue_date": (
+                record["issue_date"].isoformat()
+                if isinstance(
+                    record.get("issue_date"),
+                    datetime,
+                )
+                else record.get("issue_date")
+            ),
+            "due_date": (
+                record["due_date"].isoformat()
+                if isinstance(
+                    record.get("due_date"),
+                    datetime,
+                )
+                else record.get("due_date")
+            ),
+            "renewal_count": record.get(
+                "renewal_count",
+                0,
+            ),
+        }
+
+        if book:
+
+            borrowing["title"] = book.get(
+                "title",
+                "Unknown title",
+            )
+
+            borrowing["author"] = book.get(
+                "author",
+                book.get(
+                    "authors",
+                    "",
+                ),
+            )
+
+        else:
+
+            borrowing["title"] = "Unknown title"
+            borrowing["author"] = ""
+
+        borrowings.append(borrowing)
+
+    return {
+        "success": True,
+        "student_id": student_id,
+        "borrowings": borrowings,
+        "count": len(borrowings),
+        "message": (
+            f"You currently have "
+            f"{len(borrowings)} borrowed book(s)."
+        ),
+    }
